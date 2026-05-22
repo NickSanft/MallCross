@@ -4,6 +4,51 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-22 — Phase 3: Crossword core (data + logic)
+
+### Added
+- `scripts/crossword/CrosswordGrid.gd` — immutable solution grid. Square only; `size` configurable so synthetic 3x3/5x5 fixtures drive tests while the production game uses 15x15. Loads from an array of row strings (uppercased automatically), exposes `is_block`, `cell`, `in_bounds`, `to_strings`, `block_count`, `white_count`.
+- `scripts/crossword/CrosswordSymmetry.gd` — 180° rotational symmetry checker (the American crossword standard). `is_symmetric` plus `find_asymmetries` which returns one entry per violating pair (dedup'd to avoid double-reporting the mirror) and `mirror_position` for editor tooling later.
+- `scripts/crossword/CrosswordNumbering.gd` — standard NYT numbering. A cell starts an across word iff its left neighbor is a block or out-of-bounds AND its right neighbor is non-block (so the run is length >= 2). Length-1 stranded white cells are correctly skipped. Numbers proceed left-to-right, top-to-bottom. `find_word_slots` returns `{number, direction, row, col, length, answer}` dicts for every across/down entry.
+- `scripts/crossword/CrosswordState.gd` — mutable player state: per-cell letter + pencil/pen flag. `set_letter` uppercases and clamps to one character; clearing a cell clears the pencil flag too. Pencil flag is auto-reset when the cell is blanked.
+- `scripts/crossword/CrosswordValidator.gd` — `is_cell_correct`, `is_word_complete`, `is_puzzle_solved`, `cells_in_word`, `correct_cell_count`. Blocks always count as correct (they don't need entries), so a fully-solved puzzle ignores block cells.
+- `scripts/crossword/CrosswordSerializer.gd` — JSON in/out with explicit format versions (`PUZZLE_FORMAT_VERSION = 1`, `STATE_FORMAT_VERSION = 1`). Defensive parsing: missing fields default to safe empties so malformed save files don't crash the loader.
+- 6 GUT test files covering all 6 modules — **75 new tests**, total project test count: **116/116** across 9 scripts (195 assertions).
+
+### Why it matters
+Phase 4 wires this into the food court tables, but every UI decision there (cursor movement, current-clue highlight, rebus entry, pencil mode toggle, "check letter" button, "reveal word" button, save-on-exit) is just rendering and event-handling on top of these modules. Doing the data layer first — with 75 tests behind it — means Phase 4 ships UI without worrying about the underlying correctness of word-finding, numbering, or solve-state. Same pattern as Phase 1: thin scene code over heavily-tested pure helpers.
+
+### Architecture
+- Six small modules, each `RefCounted` with mostly static methods. No singletons, no autoloads, no node dependencies. The whole crossword stack can be exercised from a unit test in milliseconds.
+- Grid is immutable after construction; State is the only mutable surface. This makes solve-state save/restore trivially safe — round-tripping a puzzle never affects its solution.
+- Serializer format is dict-first, JSON-second. The dict form is the canonical shape; `puzzle_to_json` / `puzzle_from_json` are thin wrappers over `JSON.stringify` / `JSON.parse_string`. This lets Phase 7's authoring tool emit dicts directly without round-tripping through string parsing.
+- All slot/clue data is plain `Dictionary` (vs. a custom class) so it's directly JSON-serializable without a marshaller. Trade-off: less type safety inside the dict, but the cost of marshalling outweighs that for a value-type the player never mutates.
+
+### UX details
+N/A — no UI in this phase.
+
+### Tests
+- `tests/test_crossword_grid.gd` — 15 tests: parsing, uppercasing, square-ness, block detection, out-of-bounds, round-trip, block/white counts.
+- `tests/test_crossword_symmetry.gd` — 9 tests: open grids, center block, symmetric/asymmetric 5x5, multi-pair asymmetries, mirror math.
+- `tests/test_crossword_numbering.gd` — 10 tests: 3x3 numbering, 5x5 with blocks (verifies stranded length-1 cells get no number), slot enumeration, across/down filtering, answer-string extraction.
+- `tests/test_crossword_state.gd` — 13 tests: empty init, set_letter normalization, pencil flag lifecycle, clear_cell, out-of-bounds noop, filled_count.
+- `tests/test_crossword_validator.gd` — 15 tests: cell correctness, block-always-correct, word completion, puzzle solved, blank vs wrong cell, cells_in_word for both directions, correct_cell_count progression.
+- `tests/test_crossword_serializer.gd` — 13 tests: dict shape, format version recorded, metadata, round-trip via JSON, garbage-input tolerance, state round-trip preserves entries AND pencil flags, JSON validity.
+
+### Pre-push checklist (Phase 3)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] GUT: 116/116 tests passing across 9 scripts (195 asserts), exit 0.
+
+### Known limitations
+- **No bundled 15x15 puzzle yet** — the logic supports it, but writing a real puzzle requires the authoring tool from Phase 7. Phase 4 will use a small fixture for the demo interaction; Phase 7 backfills the week-1 themed pack.
+- No clue text on the slots returned by `find_word_slots` — slots carry the answer, but clue text comes from the loaded puzzle file (Phase 4 will bind them).
+- No support for rebus (multi-letter cells), circled cells, or shaded cells — Phase 7+ if the design calls for them.
+- Defensive parsing tolerates malformed save files but doesn't surface diagnostic info — fine for v1, will improve once we have a real failure mode to debug.
+
+[0.3.0]: https://github.com/NickSanft/MallCross/releases/tag/v0.3.0
+
 ## [0.2.0] - 2026-05-22 — Phase 2: Mall greybox
 
 ### Added
@@ -143,5 +188,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.3.0...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1
