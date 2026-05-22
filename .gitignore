@@ -1,0 +1,34 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Imported translations (automatically generated from CSV files)
+*.translation
+
+# Mono-specific ignores
+.mono/
+data_*/
+mono_crash.*.json
+
+# Build / export artifacts (we may track export_presets.cfg later)
+build/
+export.cfg
+export_presets.cfg
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors / tooling
+.directory
+*~
+*.tmp
+.vscode/
+.idea/
+
+# CI artifacts
+artifacts/
+
+# Claude Code local settings (commit .claude/settings.json if you want to share)
+.claude/settings.local.json

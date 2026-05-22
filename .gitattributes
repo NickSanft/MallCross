@@ -1,0 +1,29 @@
+* text=auto eol=lf
+
+# Force LF on source-y files regardless of OS
+*.gd        text eol=lf
+*.gdshader  text eol=lf
+*.tscn      text eol=lf
+*.tres      text eol=lf
+*.cfg       text eol=lf
+*.godot     text eol=lf
+*.import    text eol=lf
+*.uid       text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.md        text eol=lf
+*.svg       text eol=lf
+*.txt       text eol=lf
+
+# Binary
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.ttf       binary
+*.otf       binary
+*.wav       binary
+*.ogg       binary
+*.mp3       binary
+*.glb       binary
+*.gltf      binary

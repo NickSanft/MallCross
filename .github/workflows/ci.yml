@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.6.1
+  GODOT_STATUS: stable
+
+jobs:
+  test:
+    name: Parse-check + GUT
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Godot binary
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot-bin
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_STATUS }}-linux-x86_64
+
+      - name: Download Godot
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/godot-bin
+          curl -fsSL -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_STATUS}/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64.zip"
+          unzip -o /tmp/godot.zip -d /tmp/godot-extracted
+          mv /tmp/godot-extracted/Godot_v*_linux.x86_64 ~/godot-bin/godot
+          chmod +x ~/godot-bin/godot
+
+      - name: Add Godot to PATH
+        run: echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+
+      - name: Godot version
+        run: godot --version
+
+      - name: Import project (generates .godot/ on first run)
+        run: |
+          set -euo pipefail
+          # First headless run imports resources. The --quit-after flag exits
+          # cleanly after N frames; we tolerate non-zero here because Godot
+          # sometimes exits 1 after a clean import on CI.
+          godot --headless --import || true
+
+      - name: Parse check
+        run: godot --headless --quit
+
+      - name: Run GUT tests
+        run: godot --headless -s res://addons/gut/gut_cmdln.gd -gdir=res://tests/ -gexit
