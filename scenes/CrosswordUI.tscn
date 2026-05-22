@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://c0mallcrossxwui"]
+
+[ext_resource type="Script" path="res://scripts/crossword/CrosswordUI.gd" id="1_ui"]
+
+[node name="CrosswordUI" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+script = ExtResource("1_ui")

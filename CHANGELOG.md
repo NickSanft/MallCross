@@ -4,6 +4,56 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-22 — Phase 4: In-world table interaction + crossword UI
+
+### Added
+- `scripts/crossword/CrosswordCursor.gd` — pure cursor model. `at_start` lands at the first non-block cell; `toggle_direction`, `move_to`, `move`, `advance`, `retreat`, `direction_vector`, `current_word_cells`, `current_word_start`. No node refs — fully GUT-testable.
+- `scripts/crossword/CrosswordGridView.gd` — custom-drawn grid (`Control` with a single `_draw` call). Renders cursor cell in cyan, current-word cells in pale blue, numbers in the top-left of each cell, letters centered (pencil entries in gray). Avoids spawning 225 child nodes for a 15x15 puzzle.
+- `scripts/crossword/CrosswordUI.gd` + `scenes/CrosswordUI.tscn` — modal panel: title + progress (`N / N`) + direction + pencil indicator in the header, grid + scrollable clue list (across + down with the current clue highlighted yellow) in the body, current-clue caption below the grid, control hints in the footer. Layout built programmatically in `_ready` (avoids a fragile 20-node `.tscn`). Keyboard: A–Z to enter letters, Backspace to delete (and retreat if cell already blank), arrows to move (auto-switching direction), Tab/Space to toggle direction, P toggles pencil, Esc closes the modal. Emits `puzzle_solved` the moment every cell matches; `closed` on Esc.
+- `scripts/PuzzleLoader.gd` — loads puzzles from `res://data/puzzles/<id>.json`. Returns the same dict shape as `CrosswordSerializer.puzzle_from_dict` so callers can't tell whether the puzzle came from disk or memory.
+- `data/puzzles/demo_5x5.json` — first bundled fixture (`demo_5x5`). 5x5 with 180° symmetric blocks, 3 across + 2 down entries, full clue text. Two answers are placeholder strings (real puzzles arrive in Phase 7); the format and pipeline are exercised end-to-end either way.
+- `scripts/HUD.gd` + `scenes/HUD.tscn` — minimal world-space HUD with one centered interaction prompt label ("[E] Solve MINI Crossword"). Phase 5 will add a Woints counter.
+- `scripts/GameController.gd` + Main.tscn now uses it as the root. Wires `Player.interaction_triggered` → `PuzzleLoader.load_by_id` → `CrosswordUI.open_puzzle`, and `CrosswordUI.closed` → `Player.set_paused_for_ui(false)`. Logs on `puzzle_solved` (Woints award lands in Phase 5).
+- `Player.gd` interaction layer: `RayCast3D` child of `Camera3D` looking 3 m forward. `_update_interaction_target` polls the ray each physics frame; emits `interactable_changed(node)` whenever the hit object in the `interactable` group transitions in/out of view. `interaction_triggered(node)` fires when the player presses E with something in sight. New `set_paused_for_ui(bool)` flips mouse capture and bails on both `_physics_process` and `_unhandled_input` while a modal is up.
+- `MallGreybox._build_table` now takes an optional `puzzle_id` — when set, the tabletop joins the `interactable` group with `puzzle_id` + `puzzle_label` metadata. Phase 4 wires the MINI table to `demo_5x5`; MIDI/FULL get filled in Phase 7.
+- `tests/test_crossword_cursor.gd` — **19 GUT tests** covering at-start, toggle, move bounds, block-skipping, advance/retreat, direction vectors, current-word enumeration across/down, block-stop, on-block returns empty. Total project test count: **135/135 across 10 scripts** (230 assertions).
+
+### Why it matters
+Phase 4 is the first phase where MallCross actually plays. The Phase 1 controller, Phase 2 mall, and Phase 3 crossword core all click together when the player walks to the MINI table, presses E, and is dropped into a modal where every keystroke maps to a puzzle action. Phase 5 just adds the persistent profile + Woints economy; Phase 6 adds shops; Phase 7 backfills real puzzles — but the core loop (walk → solve → solved!) exists as of `v0.4.0`.
+
+### Architecture
+- The interaction system is opinionated about responsibilities: `Player` owns the raycast and emits signals; `GameController` owns the policy decision of "what does interaction X open"; `CrosswordUI` owns puzzle state while open. Nothing else knows about the others' internals. Phase 6's shop browsing will plug into the same signals.
+- `CrosswordUI` builds its layout in code rather than in `.tscn`. Trade-off: less inspectable in the editor, much easier to diff / refactor / theme later. Phase 8's PS1/N64 style pass can override a single `StyleBoxFlat` and font choice and re-skin the whole modal.
+- `CrosswordGridView` draws all NxN cells in one pass via `_draw`. At 15x15 that's 225 quads; spawning 225 `Control` nodes would have been ~10x slower and 100x more memory. The `_word_cell_set` dict cache means current-word highlighting is O(1) per cell during draw.
+- `PuzzleLoader` exists so Phase 7's authoring tool can write JSON files directly into `res://data/puzzles/` and the game picks them up without code changes.
+
+### UX details
+- HUD prompt appears the moment the interaction ray hits a wired table; disappears the moment you look away.
+- Opening the modal hides the mouse-capture lock so the player can move the cursor on screen if needed; closing it re-captures.
+- Direction toggles automatically when arrow keys are pressed in the orthogonal axis (e.g. pressing Up while in Across switches to Down and moves).
+- Backspace on a filled cell clears it; Backspace on an already-blank cell retreats first (matches NYT app behavior).
+- Pencil mode persists across letter entries until toggled off; pencil entries render in light gray to distinguish from confident pen entries.
+
+### Tests
+- `tests/test_crossword_cursor.gd` — 19 tests: position initialization, block-skipping at start, full-row-block wrap, toggle, valid/invalid move targets, blocked advance, retreat, direction vectors, across/down current-word enumeration, full-column/full-row walk through letter-only cells, on-block returns empty.
+- UI integration is exercised by the 60-frame headless smoke-run of `Main.tscn` (catches any `_ready`-time crash in `GameController`, `CrosswordUI`, or `HUD`). Interactive flows (Esc closes, letters fill, puzzle-solved signal fires) are not GUT-testable headless and will require either a dedicated test scene or Godot's editor-test runner — deferred until needed.
+
+### Pre-push checklist (Phase 4)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0 (Main + HUD + CrosswordUI load without error in headless).
+- [x] GUT: 135/135 tests passing across 10 scripts (230 asserts), exit 0.
+
+### Known limitations
+- **Only the MINI table is wired.** MIDI and FULL show their labels but pressing E does nothing — by design until Phase 7's authoring tool produces a 9x9 and a 15x15.
+- **No persistence of solve state.** Closing the modal discards your entries. Phase 5 adds the persistent profile and resumes mid-puzzle on re-open.
+- **No rebus entry yet** (originally listed for Phase 4 — pushed to Phase 7+ since real puzzles drive the need).
+- **No mouse-click cell selection on the grid** — keyboard only for now. Easy to add in a later polish phase.
+- **`demo_5x5` has two placeholder answers.** The crossword grid still validates correctly; the clues just say so.
+- **No clue text on slots returned by `find_word_slots`** — `CrosswordUI._clue_text_for` does the join against the loaded puzzle's `clues` array. Phase 7 may merge them at load time if it simplifies the authoring tool.
+
+[0.4.0]: https://github.com/NickSanft/MallCross/releases/tag/v0.4.0
+
 ## [0.3.0] - 2026-05-22 — Phase 3: Crossword core (data + logic)
 
 ### Added
@@ -188,5 +238,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.4.0...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1

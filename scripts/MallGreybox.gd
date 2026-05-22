@@ -187,18 +187,26 @@ func _build_food_court_tables() -> void:
 	var table_row_center: Vector3 = Vector3(0.0, 0.0, fc_z_center + 2.0)
 	var positions: Array[Vector3] = MallLayoutMath.food_court_table_positions(TABLE_COUNT, TABLE_SPACING, table_row_center)
 	var difficulty_labels: Array[String] = ["MINI", "MIDI", "FULL"]
+	# Phase 4: only MINI has a wired puzzle (demo_5x5). MIDI / FULL get filled
+	# in Phase 7 once the authoring tool produces real 15x15s.
+	var puzzle_ids: Array[String] = ["demo_5x5", "", ""]
 	for i in range(positions.size()):
-		_build_table("Table_" + difficulty_labels[i], positions[i], difficulty_labels[i])
+		_build_table("Table_" + difficulty_labels[i], positions[i], difficulty_labels[i], puzzle_ids[i])
 
 
-func _build_table(table_name: String, table_position: Vector3, label_text: String) -> void:
+func _build_table(table_name: String, table_position: Vector3, label_text: String, puzzle_id: String = "") -> void:
 	var table_root: Node3D = Node3D.new()
 	table_root.name = table_name
 	table_root.position = table_position
 	add_child(table_root)
 
 	var top_pos: Vector3 = Vector3(0.0, TABLE_TOP_HEIGHT, 0.0)
-	table_root.add_child(_make_box("Top", top_pos, TABLE_TOP_SIZE, TABLE_TOP_COLOR))
+	var top: StaticBody3D = _make_box("Top", top_pos, TABLE_TOP_SIZE, TABLE_TOP_COLOR)
+	if puzzle_id != "":
+		top.add_to_group(Player.INTERACTION_GROUP)
+		top.set_meta("puzzle_id", puzzle_id)
+		top.set_meta("puzzle_label", "Solve " + label_text + " Crossword")
+	table_root.add_child(top)
 
 	var leg_x: float = TABLE_TOP_SIZE.x * 0.5 - 0.12
 	var leg_z: float = TABLE_TOP_SIZE.z * 0.5 - 0.12
