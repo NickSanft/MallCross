@@ -19,6 +19,8 @@ var title: String = ""
 var pencil_mode: bool = false
 
 var _solved_emitted: bool = false
+var _reward_amount: int = 0
+var _reward_already_taken: bool = false
 var _grid_view: CrosswordGridView
 var _title_label: Label
 var _progress_label: Label
@@ -29,6 +31,7 @@ var _clue_list: RichTextLabel
 var _footer_label: Label
 var _grid_view_holder: PanelContainer
 var _solved_banner: PanelContainer
+var _solved_reward_label: Label
 var _solved_continue_button: Button
 
 
@@ -38,7 +41,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 
-func open_puzzle(puzzle: Dictionary, existing_state: CrosswordState = null) -> void:
+func open_puzzle(puzzle: Dictionary, existing_state: CrosswordState = null, reward_amount: int = 0, reward_already_taken: bool = false) -> void:
 	grid = puzzle.get("grid", CrosswordGrid.new())
 	clues = puzzle.get("clues", [])
 	title = puzzle.get("title", "Crossword")
@@ -51,9 +54,11 @@ func open_puzzle(puzzle: Dictionary, existing_state: CrosswordState = null) -> v
 	cursor = CrosswordCursor.at_start(grid)
 	slots = CrosswordNumbering.find_word_slots(grid)
 	pencil_mode = false
+	_reward_amount = max(0, reward_amount)
+	_reward_already_taken = reward_already_taken
 	# If we loaded an already-solved state, suppress the puzzle_solved signal
-	# so re-opening a solved puzzle doesn't re-fire it (Phase 5 will award
-	# Woints on this signal — we don't want double awards).
+	# so re-opening a solved puzzle doesn't re-fire it (GameController would
+	# otherwise try to double-award).
 	var already_solved: bool = CrosswordValidator.is_puzzle_solved(grid, state)
 	_solved_emitted = already_solved
 
@@ -236,6 +241,12 @@ func _build_solved_banner() -> void:
 	subline.add_theme_color_override("font_color", Color(0.92, 0.92, 0.92))
 	banner_vbox.add_child(subline)
 
+	_solved_reward_label = Label.new()
+	_solved_reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_solved_reward_label.add_theme_font_size_override("font_size", 18)
+	_solved_reward_label.add_theme_color_override("font_color", Color(1.0, 0.90, 0.35))
+	banner_vbox.add_child(_solved_reward_label)
+
 	_solved_continue_button = Button.new()
 	_solved_continue_button.text = "Continue"
 	_solved_continue_button.add_theme_font_size_override("font_size", 18)
@@ -313,6 +324,7 @@ func _refresh_solved_banner() -> void:
 	var solved: bool = CrosswordValidator.is_puzzle_solved(grid, state)
 	_solved_banner.visible = solved
 	if solved:
+		_solved_reward_label.text = _reward_text()
 		if not _solved_emitted:
 			_solved_emitted = true
 			puzzle_solved.emit()
@@ -321,6 +333,14 @@ func _refresh_solved_banner() -> void:
 	else:
 		# Allow re-firing puzzle_solved if the player erases and re-solves.
 		_solved_emitted = false
+
+
+func _reward_text() -> String:
+	if _reward_already_taken:
+		return "(Already solved — no new Woints)"
+	if _reward_amount > 0:
+		return "+%d Woints" % _reward_amount
+	return ""
 
 
 func _unhandled_input(event: InputEvent) -> void:

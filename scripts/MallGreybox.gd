@@ -206,6 +206,7 @@ func _build_table(table_name: String, table_position: Vector3, label_text: Strin
 		top.add_to_group(Player.INTERACTION_GROUP)
 		top.set_meta("puzzle_id", puzzle_id)
 		top.set_meta("puzzle_label", "Solve " + label_text + " Crossword")
+		top.set_meta("woints_reward", WointsConfig.reward_for_difficulty(label_text))
 	table_root.add_child(top)
 
 	var leg_x: float = TABLE_TOP_SIZE.x * 0.5 - 0.12

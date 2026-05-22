@@ -4,6 +4,66 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-22 — Phase 5: Persistent profile + Woints economy
+
+### Added
+- `scripts/Profile.gd` — persistent player model. Holds `woints`, `current_day`, `puzzles_solved` (`puzzle_id` → `{first_solved_day}`), and an in-memory cache of `CrosswordState` per puzzle. Pure model — no disk I/O. Defensive `from_dict` clamps negative Woints and zero/missing day to 1. `mark_puzzle_solved` returns `true` only on first call per puzzle so the caller can award Woints idempotently.
+- `scripts/ProfileStore.gd` — disk I/O at `user://profile.json`. Defaults to `Profile.new()` on missing file, empty file, or garbage JSON — the game always boots into a playable state. `save_to_path` returns a bool so callers can log failures; `delete_at_path` exists for tests and a future "Reset Save" menu option.
+- `scripts/WointsConfig.gd` — per-difficulty reward table. MINI = 50, MIDI = 120, FULL = 300, DEFAULT = 25. Case-insensitive lookup; difficulties scale strictly. Phase 7's puzzle pack inherits these values unchanged.
+- 40 new GUT tests across three files:
+  - `tests/test_profile.gd` (24 tests) — defaults, Woints add/clamp, mark/repeat-solve, day advance + clamp, state cache round-trip, dict round-trip with all fields, defensive parsing.
+  - `tests/test_profile_store.gd` (10 tests) — disk round-trip on temp `user://` paths (cleaned up per-test), missing/empty/garbage file recovery, valid-JSON shape verification, null-profile handling, delete-and-check.
+  - `tests/test_woints_config.gd` (6 tests) — per-tier lookup, case insensitivity, unknown-label fallback, monotonic tier ordering.
+- Total project test count: **175/175 across 13 scripts** (300 assertions).
+- `HUD` now shows two persistent labels:
+  - **Woints** (top-right) — yellow with black outline. Updated by `GameController` on load and after each award.
+  - **Day** (top-left) — pale blue. Reads `Profile.current_day` on load.
+- `CrosswordUI.open_puzzle` takes two new params:
+  - `reward_amount: int` — Woints earned on first solve. Shown in the solve banner as "+N Woints".
+  - `reward_already_taken: bool` — if true, banner reads "Already solved — no new Woints" instead.
+- `GameController` rewritten around `Profile`:
+  - Loads at `_ready` and pushes initial Woints/Day to HUD.
+  - On interact: looks up the table's `woints_reward` metadata, passes the remaining reward to the UI (0 if puzzle already solved).
+  - On `puzzle_solved`: calls `Profile.mark_puzzle_solved` (idempotent), awards Woints if first solve, saves profile.
+  - On UI close: caches the live state on the profile, saves profile.
+- `MallGreybox._build_table` now stores `woints_reward` metadata on each wired table (via `WointsConfig.reward_for_difficulty(label_text)`).
+
+### Why it matters
+The game now remembers you between runs. Walk into the MINI table, solve the puzzle, see "+50 Woints" on the banner, see your HUD balance jump from 0 to 50, quit the game, re-launch, and you're back at Day 1 with 50 Woints and the puzzle marked solved. Re-entering the table shows the "(Already solved — no new Woints)" footer when you re-fill it. Phase 6 plugs into `Profile.add_woints(-N)` for shop purchases; Phase 7's day advancement increments `current_day` ahead of each new themed puzzle.
+
+### Architecture
+- `Profile` is a pure data model. `ProfileStore` is the only I/O surface. The two are split deliberately so unit tests on `Profile` don't touch the disk and tests on `ProfileStore` don't have to set up complex model state.
+- Save is idempotent. The same dict-serialization path runs whether the player closes a puzzle, solves it, or never opens it — there's exactly one shape of save file.
+- `puzzles_solved` records the *day* of first solve, not just a bool. Phase 7's streak bonus calculation will read this directly without needing a second data structure.
+- The `_cached_states` dict on `Profile` holds live `CrosswordState` references — same trick as `v0.4.1`'s `GameController` cache. `to_dict` serializes them through `CrosswordSerializer` on demand, so disk format and code format are decoupled.
+- Reward amount travels through the system as metadata on the interactable. `GameController` looks it up once at open time, passes it to the UI. The UI never reads the profile directly — it's display-only.
+
+### UX details
+- HUD updates the moment the puzzle is solved, before the banner's Continue button is even clicked.
+- Solve banner now has three lines: "PUZZLE SOLVED" / "Nice work!" / reward text. Reward text is yellow when there's a Woints award, gray when already-solved.
+- Day counter is visible immediately on game launch — even before solving anything — so the day system's existence is discoverable.
+- Quitting the game saves on `_on_ui_closed`; we don't currently save on `_notification(NOTIFICATION_WM_CLOSE_REQUEST)` (Phase 10 polish).
+
+### Tests
+- `tests/test_profile.gd` — model behavior in isolation: defaults, mutations, round-trips, defensive parsing of bad input.
+- `tests/test_profile_store.gd` — disk round-trips per-test on unique `user://test_profile_<usec>.json` paths, cleaned up in `after_each`. Garbage-file recovery confirms the game can't be bricked by a corrupted save.
+- `tests/test_woints_config.gd` — reward lookup and tier monotonicity.
+
+### Pre-push checklist (Phase 5)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0 (HUD labels render, profile loads in headless).
+- [x] GUT: 175/175 tests passing across 13 scripts (300 asserts), exit 0.
+
+### Known limitations
+- **No day advancement mechanic yet.** `Profile.advance_day` works in code but nothing in the game calls it. Phase 7 wires it to the themed puzzle pack (one puzzle per day, advancing on solve).
+- **No save on game-quit.** Closing the window via the title bar X doesn't save. Currently saves happen on puzzle close + puzzle solve, which covers the practical cases but not "left the game open then quit while looking around the mall."
+- **No streak bonus yet.** `first_solved_day` is recorded for future bonus math; the bonus logic itself is Phase 7.
+- **No "Reset Save" menu option.** `ProfileStore.delete_at_path` exists for tests; Phase 10 wires a settings-menu option to it.
+- Solve banner reward text is plain — no animation, no celebration sound. Phase 8 polish.
+
+[0.5.0]: https://github.com/NickSanft/MallCross/releases/tag/v0.5.0
+
 ## [0.4.1] - 2026-05-22 — Phase 4 polish: solve banner + in-memory state cache
 
 ### Added
@@ -267,5 +327,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.5.0...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1
