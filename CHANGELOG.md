@@ -4,6 +4,55 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-22 — Phase 2: Mall greybox
+
+### Added
+- `scripts/MallLayoutMath.gd` — pure static helpers (`store_z_positions`, `store_front_x`, `food_court_table_positions`, `player_spawn_position`, `is_inside_box`). Centering math for the store run lives here so layout tweaks (more stores, different spacing) don't require touching geometry code.
+- `scripts/MallGreybox.gd` — programmatic greybox builder:
+  - 8 m × 40 m corridor with 5 m ceiling and 4 corridor overhead lights.
+  - 6 colored store-front facades (3 per side, 10 m wide, 1.5 m gaps) flush against the inside of the corridor walls, each labeled `STORE 1`…`STORE 6` via `Label3D`.
+  - 20 m × 18 m food court extension at the +Z end with 3 tables at `MINI`, `MIDI`, `FULL` positions — Phase 4 will wire interaction prompts to these.
+  - Closed entrance endcap at the −Z end (mall entrance comes later).
+  - Player auto-positioned 3 m inside the entrance, facing into the mall.
+- `scenes/MallGreybox.tscn` — Node3D with `MallGreybox.gd` + a `Player.tscn` instance.
+- `scenes/Main.tscn` now instances `MallGreybox.tscn`.
+- `tests/test_mall_layout_math.gd` — 21 GUT tests covering store centering, side symmetry, spacing math, food-court table layout, player spawn calculation, and AABB containment.
+
+### Removed
+- `scripts/TestRoom.gd`, `scripts/TestRoom.gd.uid`, `scenes/TestRoom.tscn` — Phase 1 scaffolding was always slated for deletion at Phase 2, per the CHANGELOG note on `v0.1.0`.
+
+### Why it matters
+With a navigable mall in place, the next four phases have concrete world coordinates to attach to: Phase 3's crossword logic ships independently, Phase 4 binds it to the three labeled food-court tables, Phase 6 fills in the store interiors behind the colored facades, and Phase 9 spawns NPCs along the corridor. The layout math is exhaustively tested so re-tuning corridor width or store count is a one-line change with no surprises.
+
+### Architecture
+- Same pattern as Phase 1: pure helpers (`MallLayoutMath`) separated from node-bound builders (`MallGreybox`). The builder is a thin orchestrator — it reads layout constants, asks `MallLayoutMath` where things go, and emits `StaticBody3D` boxes via a single `_make_box` helper.
+- All geometry is generated in `_ready` rather than authored as a `.tscn`. Trade-off: scenes are easier to inspect in the editor, but code is faster to iterate on, easier to diff, and trivially reusable for variant malls (different floor plans, store counts, etc.) — the kind of variation Phase 7+ will want.
+- Store-front facades are thinner (0.2 m) than the corridor walls (0.4 m) and sit flush against the corridor-facing side. This avoids Z-fighting while keeping the visual hierarchy clear (colored facades pop against a neutral corridor).
+
+### UX details
+- Mall is fully enclosed — no escape geometry; collision tested by walking into every wall on the smoke run.
+- Difficulty labels above each food-court table are billboarded so they're readable from any angle.
+- Player faces `+Z` on spawn so the first thing visible is the corridor stretching away to the food court.
+
+### Tests
+- `tests/test_mall_layout_math.gd` — 21 GUT tests across all five helpers. Total project test count: 41/41 across 3 scripts.
+- CI 60-frame headless smoke-run boots the full mall scene without runtime errors.
+
+### Pre-push checklist (Phase 2)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] GUT: 41/41 tests passing across 3 scripts, exit 0.
+- [x] TestRoom artifacts deleted (no orphan `.uid` files).
+
+### Known limitations
+- **No navmesh yet** — deferred from the original Phase 2 plan to keep this commit narrow. Navmesh baking will land just before Phase 9 (NPCs), or as its own sub-phase if anything else needs path-finding sooner.
+- Store fronts are visually solid — no doors, no interiors. Phase 6 cuts doorways and adds shop interiors.
+- Lighting is uniform omni-light placement, not styled. Phase 8's PS1/N64 art pass replaces this with a hand-tuned setup.
+- No floor markings (mall directory tiles, store signage above doors). All store identification is via `Label3D` text.
+
+[0.2.0]: https://github.com/NickSanft/MallCross/releases/tag/v0.2.0
+
 ## [0.1.0] - 2026-05-22 — Phase 1: First-person controller
 
 ### Added
@@ -94,5 +143,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.2.0...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1
