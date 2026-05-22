@@ -4,6 +4,35 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-05-22 — Phase 4 polish: solve banner + in-memory state cache
+
+### Added
+- **Solve banner** in `CrosswordUI`: a centered green/yellow panel with "PUZZLE SOLVED" + "Continue" button appears the moment every white cell matches the solution. Continue button is focused automatically so Enter/Space/Esc all close the modal without needing the mouse. Banner re-hides if the player erases a letter (and re-appears on re-solve).
+- **Input lockout while banner is up**: letter input and direction-toggle keys are ignored once the puzzle is solved — only Esc/Enter/Space close. Stops accidental key mashes from corrupting the win state.
+- **In-memory solve-state cache** in `GameController` keyed by `puzzle_id`. Closing the modal stashes the current `CrosswordState`; re-opening the same puzzle restores it. Survives walking around the mall and re-interacting with the same table; **does not** survive a game restart yet — that's Phase 5.
+- **Repeat-solve suppression**: `GameController._on_puzzle_solved` only logs once per puzzle per session. Phase 5's Woints award will hang off the same gate.
+- `CrosswordUI.open_puzzle` now accepts an optional `existing_state` param (validated by size match); falls back to a fresh empty state on mismatch or null.
+- `CrosswordUI.get_current_state()` getter so `GameController` can stash state without poking internals.
+
+### Why it matters
+Closes the two glaring UX cliffs reported on `v0.4.0`: no feedback when you finish a puzzle, and progress vanishing the moment you walk away from the table. The cache + banner together make the loop feel like a real game instead of a tech demo. Disk persistence is still pending (Phase 5) — quitting the game wipes everything — but within a single session you can now solve, walk away, come back, and continue exactly where you left off.
+
+### Architecture
+- `_solved_emitted` flag preserves "fire `puzzle_solved` exactly once per false→true transition". Erasing a letter resets it so a re-solve fires again. Re-opening a puzzle already in solved state suppresses the emit (signal is for *transition*, not *status*).
+- `CrosswordUI` doesn't know about the cache. `GameController` owns the dict; the UI is stateless across opens.
+- The state passed into `open_puzzle` is a *reference*, not a copy — the UI mutates it in place. Closing simply re-caches the same reference. Cheaper, simpler, and the reference identity doesn't matter because nothing else holds it.
+
+### Pre-push checklist
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] GUT: 135/135 tests passing, exit 0 (no test changes — patch is UI-only).
+
+### Known limitations
+- Disk persistence still missing — quitting/restarting the game loses all in-memory state. Phase 5 lands `user://profile.json` save/load.
+- Banner is plain Godot defaults; Phase 8 art pass restyles it.
+
+[0.4.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.4.1
+
 ## [0.4.0] - 2026-05-22 — Phase 4: In-world table interaction + crossword UI
 
 ### Added
@@ -238,5 +267,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.4.1...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1

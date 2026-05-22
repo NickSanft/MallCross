@@ -28,6 +28,8 @@ var _current_clue_label: Label
 var _clue_list: RichTextLabel
 var _footer_label: Label
 var _grid_view_holder: PanelContainer
+var _solved_banner: PanelContainer
+var _solved_continue_button: Button
 
 
 func _ready() -> void:
@@ -36,24 +38,38 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 
-func open_puzzle(puzzle: Dictionary) -> void:
+func open_puzzle(puzzle: Dictionary, existing_state: CrosswordState = null) -> void:
 	grid = puzzle.get("grid", CrosswordGrid.new())
 	clues = puzzle.get("clues", [])
 	title = puzzle.get("title", "Crossword")
-	state = CrosswordState.empty_for_grid(grid)
+	# Reuse the cached state if it matches this grid's size; otherwise start
+	# fresh. Mismatches happen if the puzzle file was edited between runs.
+	if existing_state != null and existing_state.size == grid.size:
+		state = existing_state
+	else:
+		state = CrosswordState.empty_for_grid(grid)
 	cursor = CrosswordCursor.at_start(grid)
 	slots = CrosswordNumbering.find_word_slots(grid)
 	pencil_mode = false
-	_solved_emitted = false
+	# If we loaded an already-solved state, suppress the puzzle_solved signal
+	# so re-opening a solved puzzle doesn't re-fire it (Phase 5 will award
+	# Woints on this signal — we don't want double awards).
+	var already_solved: bool = CrosswordValidator.is_puzzle_solved(grid, state)
+	_solved_emitted = already_solved
 
 	visible = true
 	_redraw_all()
+	_refresh_solved_banner()
 	grab_focus()
 
 
 func close_puzzle() -> void:
 	visible = false
 	closed.emit()
+
+
+func get_current_state() -> CrosswordState:
+	return state
 
 
 func _build_layout() -> void:
@@ -163,6 +179,70 @@ func _build_layout() -> void:
 	_footer_label.text = "TAB toggle direction · P pencil · Arrows move · BACKSPACE clear · ESC exit"
 	vbox.add_child(_footer_label)
 
+	_build_solved_banner()
+
+
+func _build_solved_banner() -> void:
+	# Centered overlay shown when the puzzle is fully correct. Holds focus on
+	# its Continue button so Enter/Space closes the modal without the player
+	# hunting for the mouse.
+	_solved_banner = PanelContainer.new()
+	_solved_banner.name = "SolvedBanner"
+	_solved_banner.anchor_left = 0.5
+	_solved_banner.anchor_right = 0.5
+	_solved_banner.anchor_top = 0.5
+	_solved_banner.anchor_bottom = 0.5
+	_solved_banner.offset_left = -180.0
+	_solved_banner.offset_right = 180.0
+	_solved_banner.offset_top = -110.0
+	_solved_banner.offset_bottom = 110.0
+	_solved_banner.visible = false
+	_solved_banner.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	var banner_style: StyleBoxFlat = StyleBoxFlat.new()
+	banner_style.bg_color = Color(0.10, 0.40, 0.16, 1.0)
+	banner_style.border_color = Color(1.0, 0.95, 0.45, 1.0)
+	banner_style.border_width_left = 3
+	banner_style.border_width_top = 3
+	banner_style.border_width_right = 3
+	banner_style.border_width_bottom = 3
+	banner_style.corner_radius_top_left = 8
+	banner_style.corner_radius_top_right = 8
+	banner_style.corner_radius_bottom_left = 8
+	banner_style.corner_radius_bottom_right = 8
+	banner_style.content_margin_left = 32.0
+	banner_style.content_margin_top = 24.0
+	banner_style.content_margin_right = 32.0
+	banner_style.content_margin_bottom = 24.0
+	_solved_banner.add_theme_stylebox_override("panel", banner_style)
+	add_child(_solved_banner)
+
+	var banner_vbox: VBoxContainer = VBoxContainer.new()
+	banner_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	banner_vbox.add_theme_constant_override("separation", 14)
+	_solved_banner.add_child(banner_vbox)
+
+	var headline: Label = Label.new()
+	headline.text = "PUZZLE SOLVED"
+	headline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	headline.add_theme_font_size_override("font_size", 30)
+	headline.add_theme_color_override("font_color", Color(1.0, 1.0, 0.70))
+	banner_vbox.add_child(headline)
+
+	var subline: Label = Label.new()
+	subline.text = "Nice work!"
+	subline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subline.add_theme_font_size_override("font_size", 16)
+	subline.add_theme_color_override("font_color", Color(0.92, 0.92, 0.92))
+	banner_vbox.add_child(subline)
+
+	_solved_continue_button = Button.new()
+	_solved_continue_button.text = "Continue"
+	_solved_continue_button.add_theme_font_size_override("font_size", 18)
+	_solved_continue_button.custom_minimum_size = Vector2(160.0, 36.0)
+	_solved_continue_button.pressed.connect(close_puzzle)
+	banner_vbox.add_child(_solved_continue_button)
+
 
 func _redraw_all() -> void:
 	if _grid_view == null or grid == null:
@@ -227,12 +307,37 @@ func _current_slot() -> Dictionary:
 	return {}
 
 
+func _refresh_solved_banner() -> void:
+	if _solved_banner == null:
+		return
+	var solved: bool = CrosswordValidator.is_puzzle_solved(grid, state)
+	_solved_banner.visible = solved
+	if solved:
+		if not _solved_emitted:
+			_solved_emitted = true
+			puzzle_solved.emit()
+		# Hand focus to the Continue button so Enter/Space closes the modal.
+		_solved_continue_button.grab_focus()
+	else:
+		# Allow re-firing puzzle_solved if the player erases and re-solves.
+		_solved_emitted = false
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	var ke: InputEventKey = event
+
+	# When the solved banner is up, only Esc/Enter/Space close the modal.
+	# Letter input is locked out so a stray key doesn't corrupt the win state.
+	if _solved_banner != null and _solved_banner.visible:
+		match ke.physical_keycode:
+			KEY_ESCAPE, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
+				close_puzzle()
+				accept_event()
+		return
 
 	if ke.unicode >= 65 and ke.unicode <= 90:
 		_enter_letter(char(ke.unicode))
@@ -249,6 +354,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_DELETE:
 			state.clear_cell(cursor.row, cursor.col)
 			_redraw_all()
+			_refresh_solved_banner()
 		KEY_LEFT:
 			cursor.direction = CrosswordCursor.ACROSS
 			cursor.move(0, -1)
@@ -289,9 +395,7 @@ func _enter_letter(letter: String) -> void:
 	state.set_letter(cursor.row, cursor.col, letter, pencil_mode)
 	cursor.advance()
 	_redraw_all()
-	if not _solved_emitted and CrosswordValidator.is_puzzle_solved(grid, state):
-		_solved_emitted = true
-		puzzle_solved.emit()
+	_refresh_solved_banner()
 
 
 func _backspace() -> void:
@@ -299,3 +403,4 @@ func _backspace() -> void:
 		cursor.retreat()
 	state.clear_cell(cursor.row, cursor.col)
 	_redraw_all()
+	_refresh_solved_banner()
