@@ -30,5 +30,7 @@ desktop.ini
 # CI artifacts
 artifacts/
 
-# Claude Code local settings (commit .claude/settings.json if you want to share)
+# Claude Code local files (commit .claude/settings.json if you want to share)
 .claude/settings.local.json
+.claude/*.lock
+.claude/scheduled_tasks.lock

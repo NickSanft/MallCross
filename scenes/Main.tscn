@@ -1,3 +1,7 @@
-[gd_scene format=3 uid="uid://c0mallcrossmain0"]
+[gd_scene load_steps=2 format=3 uid="uid://c0mallcrossmain0"]
+
+[ext_resource type="PackedScene" uid="uid://c0mallcrosstestrm" path="res://scenes/TestRoom.tscn" id="1_testroom"]
 
 [node name="Main" type="Node3D"]
+
+[node name="TestRoom" parent="." instance=ExtResource("1_testroom")]
