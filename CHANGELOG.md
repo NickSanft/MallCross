@@ -4,6 +4,60 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-22 — Phase 10: Settings menu + reset save
+
+### Added
+- **`scripts/SettingsManager.gd`** — disk I/O + value clamping for player-tunable settings. JSON at `user://settings.json`. Three settings ship in Phase 10:
+  - `mouse_sensitivity` (default 0.002, range 0.0005 – 0.01)
+  - `master_volume_db` (default 0 dB, range -60 to +6 dB)
+  - `footstep_volume_db` (default -8 dB, range -40 to 0 dB)
+  - Defensive: missing file / malformed JSON / out-of-range values all fall through to clamped defaults. The game can never boot into a state where the mouse is unmovable or the volume is broken.
+  - `normalize(settings)` exposes the clamping helper so callers can sanitize raw input.
+- **`scripts/SettingsMenu.gd` + `scenes/SettingsMenu.tscn`** — modal pause menu. Title, three sliders with live numeric readouts, a destructive "Reset Save" button (red text), and a "Close (Esc)" button. Slider changes fire `settings_changed` for live application (drag the mouse-sensitivity slider, feel the camera response change in real-time). Layout built programmatically in `_ready` — same pattern as `CrosswordUI` / `ShopUI`.
+- **`ConfirmationDialog`** in `SettingsMenu` for the reset flow — explicit "Reset all save data? This deletes your Woints, day, solved puzzles, and inventory. Cannot be undone." with Cancel / OK. Confirming emits `reset_save_requested`; `GameController` deletes the profile file and reloads a fresh default.
+- **`Player.set_mouse_sensitivity(float)`** + **`Player.set_footstep_volume_db(float)`** — settings drive these at runtime. `MOUSE_SENSITIVITY` was promoted from a const to `_mouse_sensitivity: float` with a `DEFAULT_MOUSE_SENSITIVITY` constant for the initial value.
+- **`GameController` settings glue**: loads via `SettingsManager.load_from_path()` on `_ready`, calls `_apply_settings` to push values into the Player + master AudioServer bus; opens the settings menu on Esc (when no other modal is up); applies live changes via the `settings_changed` signal; saves on close.
+- **Esc handling moved from `Player` to `GameController`.** Player used to toggle mouse capture on Esc — that's gone. `GameController._unhandled_input` now owns Esc and routes it to the settings menu (or lets the active modal catch it first). Mouse capture / release is now a side effect of `Player.set_paused_for_ui()`, driven by modal state.
+- **14 new GUT tests** in `tests/test_settings_manager.gd`: default-settings shape + key set, load-missing-file fallback, save+load round-trip preserves all 3 values, garbage/empty-file fallback, clamping for each setting (too high, too low, missing keys), delete-and-check, save persists clamped (not raw) values to disk.
+- Total project test count: **290/290 across 21 scripts** (560 assertions).
+
+### Why it matters
+First time the player can change anything. Mouse sensitivity was a one-line edit in `Player.gd` before; now it's a slider. Master volume affects every audio output (footsteps, plus future music / shop chimes). "Reset Save" gives a clean recovery path for testing or for sharing the game with another player on the same install.
+
+### Architecture
+- **`SettingsManager` mirrors `ProfileStore`**: same load / save / delete API, same defensive parsing, same temp-path-per-test cleanup pattern in the test file. One mental model for "things persisted to user://".
+- **Settings are a plain `Dictionary`**, not a custom class. Trivially JSON-serializable, easy to pass through signals, easy to clamp uniformly. Same trade-off as Profile's solve-state representation.
+- **Live application via signal, not poll.** `SettingsMenu` emits `settings_changed` on every slider tick; `GameController` re-applies. No per-frame setting-comparison logic in Player or audio bus management.
+- **`Reset Save` is per-file, not per-key.** Deletes the entire profile and reloads a fresh default. Settings (which live in a separate file) are untouched — so you can reset progress without losing your tuned mouse sensitivity.
+- **`Esc` is a controller concern, not a Player concern.** Player owns first-person motion; the controller owns the UI state machine. Phase 11's quit/menu flow plugs into the same handler.
+
+### UX details
+- Sliders show live value next to each (4-decimal float for sensitivity, integer dB for the two volumes).
+- "Reset Save" button is red-tinted so accidental clicks register as a *destructive* action visually.
+- "Close (Esc)" button label matches the keybind so players don't have to discover it.
+- Settings dialog is the only modal you can open from "nothing else is up" — there's exactly one Esc behavior to remember from gameplay.
+- Mouse mode flips visible the instant the menu opens (via `set_paused_for_ui(true)`); flips back to captured the instant it closes.
+
+### Tests
+- `tests/test_settings_manager.gd` — 14 tests across defaults, load/save round-trip, defensive parsing, clamping for all 3 values, delete behavior, save-persists-clamped.
+
+### Pre-push checklist (Phase 10)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0 (SettingsMenu instantiates cleanly in headless).
+- [x] GUT: 290/290 tests passing across 21 scripts (560 asserts), exit 0.
+
+### Known limitations
+- **No save slots** — original Phase 10 plan called for them; deferred to Phase 10.1+. Single profile per machine for now.
+- **No FOV slider.** The first-person camera uses Godot's default 75° FOV; would be a one-line addition to the menu + a new setting key.
+- **No keybinding remap.** Hardcoded `move_forward` = W, etc. Phase 10.x could add a keybind UI.
+- **No accessibility features** beyond the volume sliders. Colorblind modes, larger fonts, high-contrast UI, subtitles for NPC speech — all deferrable.
+- **Audio buses are flat** — only "Master" exists. SFX / music / dialog buses with separate sliders would scale better once there's more sound.
+- **No "Save settings as defaults" or import/export.** Each install has its own settings file; no profile-sharing flow.
+- **Resetting save while standing on the sleep cushion** still keeps the prompt visible until next interaction-target update. Minor UX nit.
+
+[0.10.0]: https://github.com/NickSanft/MallCross/releases/tag/v0.10.0
+
 ## [0.9.1] - 2026-05-22 — Phase 9.1: Per-day puzzle hints in NPC dialog
 
 ### Added
@@ -829,5 +883,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.10.0...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1

@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3 uid="uid://c0mallcrossmain0"]
+[gd_scene load_steps=7 format=3 uid="uid://c0mallcrossmain0"]
 
 [ext_resource type="Script" path="res://scripts/GameController.gd" id="1_game"]
 [ext_resource type="PackedScene" uid="uid://c0mallcrossmallgb" path="res://scenes/MallGreybox.tscn" id="2_mallgb"]
 [ext_resource type="PackedScene" uid="uid://c0mallcrosshud" path="res://scenes/HUD.tscn" id="3_hud"]
 [ext_resource type="PackedScene" uid="uid://c0mallcrossxwui" path="res://scenes/CrosswordUI.tscn" id="4_ui"]
 [ext_resource type="PackedScene" uid="uid://c0mallcrossshopu" path="res://scenes/ShopUI.tscn" id="5_shop"]
+[ext_resource type="PackedScene" uid="uid://c0mallcrosssetm" path="res://scenes/SettingsMenu.tscn" id="6_settings"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_game")
@@ -16,3 +17,5 @@ script = ExtResource("1_game")
 [node name="CrosswordUI" parent="." instance=ExtResource("4_ui")]
 
 [node name="ShopUI" parent="." instance=ExtResource("5_shop")]
+
+[node name="SettingsMenu" parent="." instance=ExtResource("6_settings")]

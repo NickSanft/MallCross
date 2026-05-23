@@ -12,8 +12,10 @@ extends Node3D
 @onready var _hud: HUD = $HUD
 @onready var _crossword_ui: CrosswordUI = $CrosswordUI
 @onready var _shop_ui: ShopUI = $ShopUI
+@onready var _settings_menu: SettingsMenu = $SettingsMenu
 
 var _profile: Profile
+var _settings: Dictionary
 var _current_puzzle_id: String = ""
 var _current_reward: int = 0
 var _sleeping: bool = false
@@ -21,16 +23,73 @@ var _sleeping: bool = false
 
 func _ready() -> void:
 	_profile = ProfileStore.load_from_path()
+	_settings = SettingsManager.load_from_path()
 	_refresh_hud()
+	_apply_settings(_settings)
 	_player.interactable_changed.connect(_on_interactable_changed)
 	_player.interaction_triggered.connect(_on_interaction_triggered)
 	_crossword_ui.closed.connect(_on_crossword_closed)
 	_crossword_ui.puzzle_solved.connect(_on_puzzle_solved)
 	_shop_ui.closed.connect(_on_shop_closed)
 	_hud.fade_to_black_done.connect(_on_fade_to_black_done)
+	_settings_menu.settings_changed.connect(_on_settings_changed)
+	_settings_menu.closed.connect(_on_settings_closed)
+	_settings_menu.reset_save_requested.connect(_on_reset_save_requested)
 	# MallGreybox.spawn_npcs() ran inside its own _ready before us. Rewrite
 	# each NPC's dialog with today's puzzle hint where one exists.
 	_mall.apply_npc_hints_for_day(_profile.current_day)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	# Esc opens the settings menu when no other modal is up. Modals catch
+	# Esc themselves to close their own UI before this handler runs.
+	if not event.is_action_pressed("ui_cancel"):
+		return
+	if _is_any_modal_open() or _sleeping:
+		return
+	_open_settings_menu()
+	get_viewport().set_input_as_handled()
+
+
+func _is_any_modal_open() -> bool:
+	return _crossword_ui.visible or _shop_ui.visible or _settings_menu.visible
+
+
+func _open_settings_menu() -> void:
+	_settings_menu.open_menu(_settings)
+	_player.set_paused_for_ui(true)
+	_hud.hide_prompt()
+
+
+func _on_settings_changed(updated: Dictionary) -> void:
+	# Live apply — slider drag should immediately change mouse feel + volume.
+	_settings = updated.duplicate(true)
+	_apply_settings(_settings)
+
+
+func _on_settings_closed() -> void:
+	# Final snapshot from the menu in case any unsynced slider value lingers.
+	_settings = _settings_menu.get_current_settings()
+	_apply_settings(_settings)
+	SettingsManager.save_to_path(_settings)
+	_player.set_paused_for_ui(false)
+	_player.refresh_interaction_target()
+
+
+func _on_reset_save_requested() -> void:
+	ProfileStore.delete_at_path()
+	_profile = ProfileStore.load_from_path()  # fresh defaults
+	_refresh_hud()
+	_mall.apply_npc_hints_for_day(_profile.current_day)
+
+
+func _apply_settings(settings: Dictionary) -> void:
+	var clean: Dictionary = SettingsManager.normalize(settings)
+	_player.set_mouse_sensitivity(float(clean[SettingsManager.KEY_MOUSE_SENSITIVITY]))
+	_player.set_footstep_volume_db(float(clean[SettingsManager.KEY_FOOTSTEP_VOLUME_DB]))
+	var master_bus: int = AudioServer.get_bus_index("Master")
+	if master_bus >= 0:
+		AudioServer.set_bus_volume_db(master_bus, float(clean[SettingsManager.KEY_MASTER_VOLUME_DB]))
 
 
 func _refresh_hud() -> void:

@@ -4,7 +4,7 @@ extends CharacterBody3D
 const WALK_SPEED: float = 5.0
 const SPRINT_SPEED: float = 8.5
 const JUMP_VELOCITY: float = 4.8
-const MOUSE_SENSITIVITY: float = 0.002
+const DEFAULT_MOUSE_SENSITIVITY: float = 0.002
 const HEAD_BOB_AMPLITUDE: float = 0.06
 # Cycles per meter walked — keeps bob frequency tied to actual movement, not
 # wall-clock time, so standing still freezes the bob.
@@ -30,6 +30,7 @@ var _paused_for_ui: bool = false
 var _current_interactable: Node = null
 var _footstep_player: AudioStreamPlayer3D = null
 var _last_footstep_distance: float = 0.0
+var _mouse_sensitivity: float = DEFAULT_MOUSE_SENSITIVITY
 
 signal interactable_changed(interactable: Node)
 signal interaction_triggered(interactable: Node)
@@ -67,22 +68,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var motion: InputEventMouseMotion = event
-		rotate_y(MovementMath.mouse_yaw_delta(motion.relative.x, MOUSE_SENSITIVITY))
-		camera_pivot.rotate_x(MovementMath.mouse_pitch_delta(motion.relative.y, MOUSE_SENSITIVITY))
+		rotate_y(MovementMath.mouse_yaw_delta(motion.relative.x, _mouse_sensitivity))
+		camera_pivot.rotate_x(MovementMath.mouse_pitch_delta(motion.relative.y, _mouse_sensitivity))
 		camera_pivot.rotation.x = MovementMath.clamp_pitch(camera_pivot.rotation.x)
 		return
 	if event.is_action_pressed("interact") and _current_interactable != null:
 		interaction_triggered.emit(_current_interactable)
 		return
-	if event.is_action_pressed("ui_cancel"):
-		_toggle_mouse_capture()
+	# Esc no longer toggles mouse capture from here — GameController owns it
+	# and routes Esc to the settings menu (or to the active modal).
 
 
-func _toggle_mouse_capture() -> void:
-	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	else:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+func set_mouse_sensitivity(value: float) -> void:
+	_mouse_sensitivity = value
+
+
+func set_footstep_volume_db(volume_db: float) -> void:
+	if _footstep_player != null:
+		_footstep_player.volume_db = volume_db
 
 
 func _physics_process(delta: float) -> void:
