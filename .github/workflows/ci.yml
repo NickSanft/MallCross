@@ -59,5 +59,17 @@ jobs:
       - name: Main scene smoke-run (60 frames headless)
         run: godot --headless --quit-after 60 res://scenes/Main.tscn
 
+      - name: Validate bundled puzzles
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          PUZZLE_FILES=(data/puzzles/*.json)
+          if [ ${#PUZZLE_FILES[@]} -eq 0 ]; then
+            echo "No puzzle files to validate."
+            exit 0
+          fi
+          # Pass all files in one godot invocation; the tool walks the list.
+          godot --headless -s res://tools/puzzle_validate.gd -- "${PUZZLE_FILES[@]/#/res://}"
+
       - name: Run GUT tests
         run: godot --headless -s res://addons/gut/gut_cmdln.gd -gdir=res://tests/ -gexit

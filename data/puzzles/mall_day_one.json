@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day One",
+	"author": "MallCross",
+	"theme": "First crossword in the food court",
+	"size": 5,
+	"grid": [
+		"PUTTS",
+		"E###C",
+		"AMIGO",
+		"C###R",
+		"HALVE"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Golf strokes taken on the green"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Spanish word for friend"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Cut in two equal parts"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Fuzzy stone fruit; Georgia's pride"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Twenty, or the points tally"}
+	]
+}

@@ -4,6 +4,66 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-22 — Phase 7: Real puzzles + authoring validator
+
+### Added
+- **`data/puzzles/mall_day_one.json`** — first real bundled puzzle, replacing the `demo_5x5` placeholder. 5x5 with 180° rotational symmetry, all five slots are real English words (PUTTS, AMIGO, HALVE across; PEACH, SCORE down) with corresponding clues. Same block pattern as the old demo, so the player feels the same UI/structure — only the content changed.
+- **`scripts/PuzzleValidator.gd`** — pure static helper that audits a parsed puzzle against construction rules:
+  - Grid present, non-empty, square
+  - 180° rotational symmetry
+  - No stranded short words (configurable min length, default 3)
+  - Every slot has a clue with non-empty text
+  - No duplicate `(number, direction)` pairs in the clue list
+  - No orphan clues (warning, not error)
+  - Returns an array of `{severity, code, message}` issue dicts. `has_errors` + `count_by_severity` helpers for callers.
+- **`tools/puzzle_validate.gd`** — CLI wrapper. Run:
+  ```
+  godot --headless -s res://tools/puzzle_validate.gd -- res://data/puzzles/<id>.json [<id>.json ...]
+  ```
+  Exits 0 on clean (warnings allowed), 1 on any error, 2 on usage error. Prints one `OK`/`WARN`/`ERR` line per file plus indented issue details.
+- **CI step: `Validate bundled puzzles`** — globs every JSON under `data/puzzles/`, runs the CLI validator over them in one Godot invocation, fails the build on any error. New puzzles ship through the workflow's safety net automatically.
+- `tests/test_puzzle_validator.gd` — 12 GUT tests covering: clean puzzle, missing grid, empty grid, asymmetric grid, short word, missing clue, empty clue text, duplicate clue, orphan-as-warning, severity counts, and a meta-test that loads the shipped `mall_day_one.json` and asserts zero issues.
+- Total project test count: **220/220 across 16 scripts** (367 assertions).
+
+### Changed
+- `MallGreybox` MINI table now wires to `mall_day_one` instead of `demo_5x5`. MIDI / FULL tables still unwired pending more authored puzzles in Phase 7.1.
+
+### Removed
+- `data/puzzles/demo_5x5.json` — replaced by `mall_day_one.json`. Old profiles that solved `demo_5x5` will see an orphan entry in `user://profile.json`'s `puzzles_solved` dict; harmless, will get pruned by a future "Reset Save" menu in Phase 10.
+
+### Why it matters
+The full check-letter feature shipped in Phase 6 wasn't really verifiable against the old placeholder puzzle (which had a column of gibberish — flashing red on every wrong letter looked the same as flashing red on a typo). With real interlocking words, **C** in the puzzle UI flashes only the cells the player got actually wrong — the intended behavior. The CI validator means any future puzzle author (including the eventual Phase 7.1 9x9 and 15x15) gets immediate feedback on symmetry or clue-coverage mistakes before pushing.
+
+### Architecture
+- **Validator is pure**, the CLI is a thin wrapper. The same `PuzzleValidator.validate(...)` runs in the in-process test suite and in the standalone CI tool. Both share the same issue-dict format.
+- **Issue dicts**, not custom classes. Trivially JSON-serializable, easy to feed into Phase 8's "Reload puzzle" dev tool if that lands.
+- **Severity ordering**: errors fail CI; warnings ride along. Orphan clues are marked warning because they don't break the game — the UI just doesn't display them. The CLI exit code is 0 when only warnings appear, matching shellcheck/eslint conventions.
+- **`mall_day_one` keeps the demo's block pattern.** This minimizes UI test churn (cursor still lands at the same start cell, same number of slots, same focus order). Only the letters changed.
+
+### UX details
+- Player solving the MINI table now hits a real puzzle: golf, Spanish slang, fractions, fruit, basketball.
+- The CLI validator's output is grep-friendly: status code in the first three chars (`OK `, `WARN`, `ERR`), file path next, then indented issues. Easy to wire into a future watch-mode editor.
+
+### Tests
+- `tests/test_puzzle_validator.gd` — 12 tests across the issue codes plus a happy-path validation of the shipped `mall_day_one.json`. The meta-test catches any future regression where someone edits the bundled puzzle and forgets to keep it valid.
+- The CI `Validate bundled puzzles` step is itself a test: a malformed puzzle file will fail the build before tests run.
+
+### Pre-push checklist (Phase 7)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] CLI: `tools/puzzle_validate.gd` reports `OK` on `mall_day_one.json`, exit 0.
+- [x] GUT: 220/220 tests passing across 16 scripts (367 asserts), exit 0.
+
+### Known limitations
+- **MIDI and FULL still unwired.** Hand-authoring a valid 9x9 and 15x15 is substantial work; Phase 7.1 will land them with the validator catching mistakes during authoring.
+- **No day-advancement mechanic yet.** `Profile.current_day` still only goes up via direct API calls (no Sleep action, no clock). Phase 7.1 wires daily puzzle rotation.
+- **No streak bonus.** `puzzles_solved[id].first_solved_day` is recorded but the bonus math itself is Phase 7.1+.
+- **CLI tool has no `--strict` flag for warnings-as-errors.** Trivial to add when there's a need.
+- **`mall_day_one.json` orphans old profile entries.** A `Reset Save` menu (Phase 10) or manually deleting `user://profile.json` is the workaround.
+
+[0.7.0]: https://github.com/NickSanft/MallCross/releases/tag/v0.7.0
+
 ## [0.6.0] - 2026-05-22 — Phase 6: Stores + Woints spending + functional items
 
 ### Added
@@ -391,5 +451,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.7.0...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1

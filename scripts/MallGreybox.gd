@@ -196,9 +196,9 @@ func _build_food_court_tables() -> void:
 	var table_row_center: Vector3 = Vector3(0.0, 0.0, fc_z_center + 2.0)
 	var positions: Array[Vector3] = MallLayoutMath.food_court_table_positions(TABLE_COUNT, TABLE_SPACING, table_row_center)
 	var difficulty_labels: Array[String] = ["MINI", "MIDI", "FULL"]
-	# Phase 4: only MINI has a wired puzzle (demo_5x5). MIDI / FULL get filled
-	# in Phase 7 once the authoring tool produces real 15x15s.
-	var puzzle_ids: Array[String] = ["demo_5x5", "", ""]
+	# Phase 7: MINI wired to mall_day_one. MIDI and FULL await further
+	# hand-authored puzzles + Phase 7.1 day-advance mechanic.
+	var puzzle_ids: Array[String] = ["mall_day_one", "", ""]
 	for i in range(positions.size()):
 		_build_table("Table_" + difficulty_labels[i], positions[i], difficulty_labels[i], puzzle_ids[i])
 
