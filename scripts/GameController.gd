@@ -41,6 +41,8 @@ func _on_interactable_changed(interactable: Node) -> void:
 		return
 	if interactable.has_meta("puzzle_id"):
 		_hud.show_prompt("[E] " + interactable.get_meta("puzzle_label", "Crossword"))
+	elif interactable.has_meta("daily_puzzle"):
+		_show_daily_puzzle_prompt()
 	elif interactable.has_meta("shop_id"):
 		_hud.show_prompt("[E] " + interactable.get_meta("shop_label", "Shop"))
 	elif interactable.has_meta("sleep_action"):
@@ -49,19 +51,35 @@ func _on_interactable_changed(interactable: Node) -> void:
 		_hud.hide_prompt()
 
 
+func _show_daily_puzzle_prompt() -> void:
+	var day: int = _profile.current_day
+	var puzzle_id: String = PuzzleSchedule.puzzle_id_for_day(day)
+	if puzzle_id == "":
+		_hud.show_prompt("No puzzle today — sleep to advance the day")
+	elif _profile.is_puzzle_solved(puzzle_id):
+		_hud.show_prompt("[E] Day %d Crossword (already solved)" % day)
+	else:
+		_hud.show_prompt("[E] Solve Day %d Crossword" % day)
+
+
 func _on_interaction_triggered(interactable: Node) -> void:
 	if interactable == null or _sleeping:
 		return
 	if interactable.has_meta("puzzle_id"):
-		_open_puzzle(interactable)
+		_open_puzzle(interactable, interactable.get_meta("puzzle_id"))
+	elif interactable.has_meta("daily_puzzle"):
+		var puzzle_id: String = PuzzleSchedule.puzzle_id_for_day(_profile.current_day)
+		if puzzle_id == "":
+			# No puzzle scheduled for today — leave the prompt up, do nothing.
+			return
+		_open_puzzle(interactable, puzzle_id)
 	elif interactable.has_meta("shop_id"):
 		_open_shop(interactable)
 	elif interactable.has_meta("sleep_action"):
 		_start_sleep()
 
 
-func _open_puzzle(interactable: Node) -> void:
-	var puzzle_id: String = interactable.get_meta("puzzle_id")
+func _open_puzzle(interactable: Node, puzzle_id: String) -> void:
 	var puzzle: Dictionary = PuzzleLoader.load_by_id(puzzle_id)
 	var loaded_grid: CrosswordGrid = puzzle.get("grid", CrosswordGrid.new())
 	if loaded_grid.size <= 0:
@@ -106,6 +124,9 @@ func _on_fade_to_black_done() -> void:
 	# The fade-back will play; finish sleeping when it returns (next tick is fine).
 	_sleeping = false
 	_player.set_paused_for_ui(false)
+	# Day changed — re-emit the prompt so a daily-puzzle table updates without
+	# the player needing to walk off and back.
+	_player.refresh_interaction_target()
 
 
 func _on_crossword_closed() -> void:
@@ -117,6 +138,9 @@ func _on_crossword_closed() -> void:
 		_current_puzzle_id = ""
 		_current_reward = 0
 	_player.set_paused_for_ui(false)
+	# After solving, the table's prompt should switch to "(already solved)" —
+	# refresh without making the player walk away and back.
+	_player.refresh_interaction_target()
 
 
 func _on_shop_closed() -> void:
@@ -125,6 +149,7 @@ func _on_shop_closed() -> void:
 	ProfileStore.save_to_path(_profile)
 	_hud.update_woints(_profile.woints)
 	_player.set_paused_for_ui(false)
+	_player.refresh_interaction_target()
 
 
 func _on_puzzle_solved() -> void:

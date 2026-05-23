@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Two",
+	"author": "MallCross",
+	"theme": "Day two at the food court",
+	"size": 5,
+	"grid": [
+		"SLOSH",
+		"T###A",
+		"ALDER",
+		"R###D",
+		"KOOKY"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Splash around in mud or shallow water"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Streamside tree in the birch family"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Pleasantly eccentric, in slang"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Bleak; or Tony of the Marvel films"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Tough; or English novelist Thomas ___"}
+	]
+}

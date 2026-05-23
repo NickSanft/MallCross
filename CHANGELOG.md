@@ -4,6 +4,53 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-05-22 — Phase 7.2: Daily puzzle rotation + 2nd puzzle
+
+### Added
+- **`data/puzzles/mall_day_two.json`** — second 5x5 puzzle (SLOSH / ALDER / KOOKY across; STARK / HARDY down). Same block pattern as `mall_day_one`, all real English words, validates clean.
+- **`scripts/PuzzleSchedule.gd`** — pure static helper mapping in-game day → puzzle ID. Phase 7.2 hardcodes day 1 → `mall_day_one`, day 2 → `mall_day_two`. Methods: `puzzle_id_for_day`, `has_puzzle_for_day`, `scheduled_days` (sorted), `last_scheduled_day`. Phase 7.x+ may move this to `data/schedule.json` so puzzle packs ship without code.
+- **`daily_puzzle` interactable metadata** as a fourth dispatch branch in `GameController` (alongside `puzzle_id`, `shop_id`, `sleep_action`). When the player interacts, `GameController` looks up the day's puzzle via `PuzzleSchedule` and opens it. If no puzzle is scheduled for today, the prompt reads `"No puzzle today — sleep to advance the day"` and pressing E is a no-op.
+- **Dynamic HUD prompt** for the MINI table:
+  - `[E] Solve Day N Crossword` when today's puzzle is unsolved
+  - `[E] Day N Crossword (already solved)` when already done
+  - `"No puzzle today — sleep to advance the day"` when the schedule has nothing for this day
+- **`Player.refresh_interaction_target()`** — re-emits `interactable_changed` with the current target. Called by `GameController` after sleep finishes and after each modal closes, so the HUD prompt updates without making the player walk off and back. Fixes a latent UX issue where buying an item or solving a puzzle left the prompt frozen on the pre-action text.
+- `tests/test_puzzle_schedule.gd` — 10 GUT tests covering the schedule's lookups, edge cases (day 0, negative, beyond-schedule), and a **meta-test that loads every scheduled puzzle and asserts the JSON file exists and parses**. Catches schedule/data drift the moment it happens.
+
+### Changed
+- **MINI table is now a daily-puzzle table.** `MallGreybox._build_table` takes a `daily_puzzle` bool instead of a fixed `puzzle_id`. Set true for MINI, false for MIDI / FULL (still decorative). The table tags itself `daily_puzzle: true` and stores `woints_reward` — `GameController` resolves the actual puzzle ID at interact time via `PuzzleSchedule`.
+- **`GameController._open_puzzle` now takes an explicit `puzzle_id` argument** instead of reading from interactable metadata. The dispatcher passes either the static metadata's `puzzle_id` (for legacy fixed tables) or the schedule's lookup (for daily tables). One open path, two ways to resolve the ID.
+
+### Why it matters
+Resolves the "sleeping doesn't change anything" feedback: on day 1 the MINI table plays `mall_day_one`; sleep to day 2 and it plays `mall_day_two` (full 50 Woints + streak bonus on first solve). The streak indicator activates on the second consecutive-day solve. Days 3+ show the "no puzzle today" prompt until the schedule grows — exactly the "come back tomorrow" feel of a real daily-puzzle app.
+
+### Architecture
+- **Schedule is data, dispatcher is code.** The mapping lives in `PuzzleSchedule._SCHEDULE`; nothing else in the codebase encodes "which puzzle is today's." Adding a Phase 7.3 puzzle is a one-line edit there plus the JSON file.
+- **The same `_open_puzzle` flow handles both fixed and daily tables** — the only difference is where the puzzle ID comes from. Same cache hookup, same reward calculation, same UI path.
+- **`refresh_interaction_target` is a pure broadcast** — it doesn't re-poll the ray or change `_current_interactable`; it just re-emits the signal. Cheap, side-effect-free, and the `GameController` decides what to do with the new prompt content.
+
+### UX details
+- Walking to the MINI table on a day with no scheduled puzzle no longer leaves the player wondering — the prompt explicitly says to sleep.
+- After solving today's puzzle and pressing Continue, the prompt instantly flips to `(already solved)` without requiring a step back.
+- After buying coffee, walking back to the same shop button doesn't show "Buy" anymore — the prompt updates immediately.
+
+### Tests
+- `tests/test_puzzle_schedule.gd` — direct lookups, boundary cases, meta-test loading every scheduled JSON. Total: **244/244 tests across 17 scripts** (397 assertions).
+
+### Pre-push checklist (Phase 7.2)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0 (Main loads with both puzzles in schedule).
+- [x] `tools/puzzle_validate.gd` reports `OK` on both `mall_day_one.json` and `mall_day_two.json`.
+- [x] GUT: 244/244 tests passing across 17 scripts (397 asserts), exit 0.
+
+### Known limitations
+- **Schedule ends at day 2.** Days 3+ show "no puzzle today" — by design until more puzzles are authored.
+- **MIDI / FULL tables still decorative.** They could become parallel daily-puzzle schedules (a MINI puzzle + MIDI puzzle + FULL puzzle each day), but that's a content question, not infra.
+- **Smoke-run exit code is permissive.** The current `--quit-after 60` check exits 0 even on `SCRIPT ERROR` output. CI normally runs after a fresh `--import` so it'd catch missing scripts via the GUT run anyway, but a stricter smoke-run that greps stderr for `SCRIPT ERROR` would be a nice CI improvement.
+
+[0.7.3]: https://github.com/NickSanft/MallCross/releases/tag/v0.7.3
+
 ## [0.7.2] - 2026-05-22 — Phase 7.1: Day advancement + streak bonus
 
 ### Added
@@ -524,5 +571,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.7.3...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1

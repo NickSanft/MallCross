@@ -108,3 +108,11 @@ func _update_interaction_target() -> void:
 func _set_current_interactable(node: Node) -> void:
 	_current_interactable = node
 	interactable_changed.emit(_current_interactable)
+
+
+func refresh_interaction_target() -> void:
+	# Re-emit interactable_changed for the current target without changing it.
+	# GameController calls this after the day advances or a modal closes so the
+	# HUD prompt updates immediately (the prompt text often depends on game
+	# state, not just which interactable is under the crosshair).
+	interactable_changed.emit(_current_interactable)

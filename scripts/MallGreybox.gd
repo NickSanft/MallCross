@@ -222,14 +222,15 @@ func _build_food_court_tables() -> void:
 	var table_row_center: Vector3 = Vector3(0.0, 0.0, fc_z_center + 2.0)
 	var positions: Array[Vector3] = MallLayoutMath.food_court_table_positions(TABLE_COUNT, TABLE_SPACING, table_row_center)
 	var difficulty_labels: Array[String] = ["MINI", "MIDI", "FULL"]
-	# Phase 7: MINI wired to mall_day_one. MIDI and FULL await further
-	# hand-authored puzzles + Phase 7.1 day-advance mechanic.
-	var puzzle_ids: Array[String] = ["mall_day_one", "", ""]
+	# Phase 7.2: MINI is the "daily puzzle" table — it loads whichever puzzle
+	# PuzzleSchedule has for Profile.current_day. MIDI / FULL stay decorative
+	# until further-authored puzzle packs slot into the schedule.
+	var is_daily: Array[bool] = [true, false, false]
 	for i in range(positions.size()):
-		_build_table("Table_" + difficulty_labels[i], positions[i], difficulty_labels[i], puzzle_ids[i])
+		_build_table("Table_" + difficulty_labels[i], positions[i], difficulty_labels[i], is_daily[i])
 
 
-func _build_table(table_name: String, table_position: Vector3, label_text: String, puzzle_id: String = "") -> void:
+func _build_table(table_name: String, table_position: Vector3, label_text: String, daily_puzzle: bool = false) -> void:
 	var table_root: Node3D = Node3D.new()
 	table_root.name = table_name
 	table_root.position = table_position
@@ -237,10 +238,9 @@ func _build_table(table_name: String, table_position: Vector3, label_text: Strin
 
 	var top_pos: Vector3 = Vector3(0.0, TABLE_TOP_HEIGHT, 0.0)
 	var top: StaticBody3D = _make_box("Top", top_pos, TABLE_TOP_SIZE, TABLE_TOP_COLOR)
-	if puzzle_id != "":
+	if daily_puzzle:
 		top.add_to_group(Player.INTERACTION_GROUP)
-		top.set_meta("puzzle_id", puzzle_id)
-		top.set_meta("puzzle_label", "Solve " + label_text + " Crossword")
+		top.set_meta("daily_puzzle", true)
 		top.set_meta("woints_reward", WointsConfig.reward_for_difficulty(label_text))
 	table_root.add_child(top)
 
