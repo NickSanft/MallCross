@@ -28,6 +28,11 @@ const TABLE_LEG_SIZE: Vector3 = Vector3(0.08, 0.78, 0.08)
 
 const PLAYER_SPAWN_Z_OFFSET: float = 3.0  # from entrance wall
 
+# Phase 8 PS1/N64 aesthetic. Lower vertex_snap = chunkier wobble. 100 is the
+# sweet spot for a 5–40 m mall: noticeable jitter, no broken-looking geometry.
+const PS1_VERTEX_SNAP: float = 100.0
+const PS1_SHADER: Shader = preload("res://shaders/ps1_box.gdshader")
+
 const FLOOR_COLOR: Color = Color(0.30, 0.30, 0.34)
 const CEILING_COLOR: Color = Color(0.78, 0.78, 0.74)
 const CORRIDOR_WALL_COLOR: Color = Color(0.52, 0.50, 0.46)
@@ -66,10 +71,17 @@ func _build_environment() -> void:
 	world_env.name = "Env"
 	var env: Environment = Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.08, 0.08, 0.10)
+	env.background_color = Color(0.05, 0.05, 0.08)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.85, 0.85, 0.95)
-	env.ambient_light_energy = 0.35
+	env.ambient_light_color = Color(0.75, 0.80, 0.95)
+	env.ambient_light_energy = 0.30
+	# PS1-style atmospheric fog. Tuned so the entrance is just visible from
+	# the food court but distant geometry softly fades into the dark.
+	env.fog_enabled = true
+	env.fog_light_color = Color(0.18, 0.18, 0.24)
+	env.fog_density = 0.025
+	env.fog_sky_affect = 0.0
+	env.fog_sun_scatter = 0.0
 	world_env.environment = env
 	add_child(world_env)
 
@@ -293,9 +305,15 @@ func _make_box(box_name: String, box_position: Vector3, box_size: Vector3, color
 	var box_mesh: BoxMesh = BoxMesh.new()
 	box_mesh.size = box_size
 	mesh.mesh = box_mesh
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = color
-	mesh.set_surface_override_material(0, material)
+	mesh.set_surface_override_material(0, _make_ps1_material(color))
 	body.add_child(mesh)
 
 	return body
+
+
+func _make_ps1_material(color: Color) -> ShaderMaterial:
+	var material: ShaderMaterial = ShaderMaterial.new()
+	material.shader = PS1_SHADER
+	material.set_shader_parameter("albedo", Vector3(color.r, color.g, color.b))
+	material.set_shader_parameter("vertex_snap", PS1_VERTEX_SNAP)
+	return material

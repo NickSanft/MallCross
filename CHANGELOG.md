@@ -4,6 +4,51 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-22 — Phase 8: PS1/N64 art pass (vertex snap + atmospheric fog)
+
+### Added
+- **`shaders/ps1_box.gdshader`** — spatial shader implementing the classic PS1 vertex-snap wobble:
+  - `skip_vertex_transform` render mode so the shader owns the model→view→projection chain.
+  - Snaps clip-space xy positions to a low-res NDC grid (controlled by `vertex_snap` uniform; default 100 ≈ 320-pixel snap).
+  - Behind-near-plane guard skips the snap on degenerate vertices (avoids w-divide artifacts at the camera).
+  - `vertex_lighting` render mode shades faces per-vertex instead of per-pixel — the omni lights along the corridor now cast that authentic chunky lo-fi shading across each wall and floor panel.
+- **`MallGreybox._make_ps1_material`** — factory that builds a `ShaderMaterial` from the PS1 shader with a per-box albedo color. Replaces every prior `StandardMaterial3D` in the mall (floor, ceiling, corridor walls, store-front facades, food court walls, tables, sleep cushion — ~60 surfaces).
+- **Atmospheric fog** in the WorldEnvironment: dark blue-purple (`Color(0.18, 0.18, 0.24)`) at density `0.025`, with sky/sun scatter zeroed. Calibrated so the entrance is just visible from the food court while distant geometry softly falls into the dark.
+- **Ambient light tuned** — slightly cooler (`Color(0.75, 0.80, 0.95)`) and dimmer (`0.30`) to let the omni lights pop and to make the fog visible.
+
+### Why it matters
+The mall finally has *vibes*. The geometry jitters subtly as the player walks (vertex snap), light falls in chunky bands across each face (vertex lighting), and distant corridor stretches fade into atmospheric haze (fog). Same blocky greybox geometry as Phase 2, but now it reads as "lo-fi PS1 mall" rather than "Godot test scene."
+
+### Architecture
+- **One shader, many materials.** Every box has its own `ShaderMaterial` so colors can vary, but they all share the same compiled `ps1_box.gdshader`. Adding textured surfaces in a future phase is a one-uniform change.
+- **`PS1_VERTEX_SNAP` constant in `MallGreybox`** controls the snap intensity globally. Tuning is a one-line change; could become a settings-menu option in Phase 10.
+- **Fog lives on the existing WorldEnvironment** — no new node, no new system. Fog density is the dial; color is the mood.
+- **`Label3D` text and the CrosswordUI/HUD remain crisp.** The shader only applies to box meshes (via `_make_box`), so all UI text rendering is untouched. Authenticity in the world, readability in the UI.
+
+### UX details
+- Wobble is gentle enough that close-up text labels (STORE 1, MINI, SLEEP) on the billboarded `Label3D` nodes stay readable. Those nodes don't use the shader.
+- Fog density was tuned at the corridor's full ~40 m length so the player can still spot the food court tables from the entrance — atmosphere without disorientation.
+- Vertex lighting makes the four corridor omni lights *look* like actual fixtures bathing the walls in pools of light, instead of the previous evenly-lit per-pixel result.
+
+### Tests
+- No GUT additions — shader behavior is graphical and not unit-testable. The 60-frame headless smoke-run boots the shader without compile errors, and the existing test suite (246/246) still passes since gameplay logic is untouched.
+
+### Pre-push checklist (Phase 8)
+- [x] `godot --headless --import` clean (shader compiled and imported with the project).
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0 (shader runs in headless mode).
+- [x] GUT: 246/246 tests passing, exit 0.
+
+### Known limitations
+- **No textures yet.** The shader has a texture sampler hook ready but the game still uses solid colors. Phase 8.1+ can drop in 64–128 px textures with `filter_nearest` and the look snaps into "real PS1."
+- **No affine texture mapping.** Implementing the famous PS1 texture warp requires `noperspective` varyings, which Godot 4's shader language doesn't expose directly. A workaround using per-vertex UV pre-multiplication is possible but didn't fit Phase 8's narrow scope.
+- **No low-res SubViewport render.** Rendering at 480x270 and upscaling with nearest-neighbor filtering would push the look even further toward authentic PS1 — but the project's UI scaling currently assumes full window resolution, so this is Phase 8.2 architectural work.
+- **No footstep audio.** Phase 8.1 will add an `AudioStreamPlayer3D` on the Player firing on each step (synthesized click or short WAV asset).
+- **Player has no visible body or shadow.** Cosmetic items (Mall Cap) still don't appear on the player. Phase 8.x rendering pass.
+- **Vertex snap is global, not per-room.** A future polish could vary the wobble (e.g. tamer in the food court, more aggressive in dark corridors) by swapping shader uniforms based on player position.
+
+[0.8.0]: https://github.com/NickSanft/MallCross/releases/tag/v0.8.0
+
 ## [0.7.4] - 2026-05-22 — Phase 7.3: Full week of puzzles
 
 ### Added
@@ -619,5 +664,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.7.4...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.8.0...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1
