@@ -4,6 +4,70 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-22 — Phase 6: Stores + Woints spending + functional items
+
+### Added
+- `scripts/Item.gd` — pure data class with two slot constants (`SLOT_COSMETIC`, `SLOT_FUNCTIONAL`). `from_dict` clamps negative costs to 0 and falls back to functional on unknown slot strings; `to_dict` round-trips cleanly.
+- `scripts/ItemCatalog.gd` — static registry. Phase 6 ships two items:
+  - **Coffee** (functional, 40 Woints) — enables the in-puzzle "Check Letter" action.
+  - **Mall Cap** (cosmetic, 100 Woints) — owned-state only for now; visible-on-player polish comes with the Phase 8 art pass.
+- `scripts/shop/ShopUI.gd` + `scenes/ShopUI.tscn` — modal shop browser, layout built in code (same pattern as `CrosswordUI`). Each item row shows name + slot marker + description + cost, and a per-row button whose state reflects ownership and affordability ("Buy" / "Need N more" / "Owned"). Esc or the "Leave shop" footer button closes the modal.
+- **Inventory on `Profile`**:
+  - `owned_items: Array[String]` persisted to disk.
+  - `own_item(id)` — idempotent append, returns `true` only on first acquisition.
+  - `owns(id)`, `can_afford(cost)`, `try_purchase(id, cost)` — atomic purchase that refuses unaffordable or already-owned items and never partially mutates.
+  - Defensive `from_dict` dedupes duplicate IDs and ignores non-string entries — corrupt saves can't double-own anything.
+- **Store 1 wired as a shop**. `MallGreybox._build_store_fronts` now stamps `shop_id="mall_general"` + `shop_label` metadata on Store 1's facade. Stores 2–6 remain decorative facades.
+- **`GameController` dispatch**: a single interactable can carry either `puzzle_id` *or* `shop_id` metadata. `_on_interaction_triggered` routes to `_open_puzzle` or `_open_shop` accordingly. Closing the shop saves the profile and refreshes the HUD Woints counter.
+- **Check Letter** in `CrosswordUI`:
+  - Footer hint updates to include `· C check letter (Coffee)` when the player owns Coffee.
+  - Pressing **C** in the crossword flashes a red border around any incorrect letter in the current word for 2 seconds.
+  - Uses a `SceneTreeTimer` so the flash auto-clears; the timer is null-checked at open time so re-opening a puzzle never carries stale wrong-cell highlights.
+- `CrosswordGridView.set_wrong_cells(cells)` — public API for the UI to push wrong-cell positions; renders a 3 px inset red border on top of each affected cell during `_draw`.
+- 33 new GUT tests across 3 files:
+  - `tests/test_item.gd` (7 tests) — dict round-trip, clamping, slot fallback.
+  - `tests/test_item_catalog.gd` (10 tests) — registry membership, lookups, monotonic-cost sanity, slot assignments.
+  - `tests/test_profile.gd` extended (+16 tests) — own/owns, can_afford, try_purchase (success, broke, already-owned, empty/negative inputs), inventory disk round-trip, dedup, type filtering.
+- Total project test count: **208/208 across 15 scripts** (352 assertions).
+
+### Why it matters
+First time Woints actually mean something. Earn 50 from solving the MINI puzzle, walk over to Store 1, buy a coffee for 40, return to the table, press C to see which letters you got wrong. Hat purchase wires the cosmetic slot end-to-end (Profile → ShopUI → persistence) so Phase 8 only has to add the visible-on-player rendering.
+
+### Architecture
+- **Single dispatch dimension** for interactables: the metadata key (`puzzle_id` vs `shop_id`) is what `GameController` switches on. Future interactables (NPCs in Phase 9, vending machines, etc.) plug in the same way without modifying `Player.gd` or the raycast logic.
+- **Profile owns purchase atomicity**, not the UI. `ShopUI._on_buy_pressed` just calls `_profile.try_purchase(id, cost)` and refreshes. If you ever want a quick-buy from a debug menu or a cheat command, it's the same one-liner.
+- **Coffee gating is profile-driven, not UI-driven.** `CrosswordUI` checks `_profile.owns("coffee")` at open time and on each C press. The UI itself owns no inventory state, so a future "borrow Coffee for one puzzle" mechanic would only need to lie to the UI about ownership.
+- **Wrong-cell highlighting is a one-shot overlay**, not a persistent UI mode. The grid view holds a `_wrong_cell_set` dict, the UI clears it after 2s, and re-opening the puzzle blanks it explicitly. No leaking state between puzzles.
+- Items live in code (`ItemCatalog.all_items()`) rather than JSON for Phase 6 — only two of them, balance is volatile, the JSON loader would be more code than the items it'd load. Phase 7 may move them to JSON if the puzzle pack ships themed shop items.
+
+### UX details
+- Shop modal greeting shows the current Woints balance in the header next to the shop name.
+- Per-row "Need N more" text on unaffordable items tells the player exactly how many Woints to earn, no mental subtraction.
+- Cosmetic vs functional slot is surfaced in the item row as `(cosmetic)` / `(functional)` so the player can see which slot a purchase fills.
+- Check-letter flash is *only* over incorrect entries — blank cells are not flagged. Lets the player distinguish "wrong letter" from "haven't filled yet".
+- Leave-shop button is focused on open so Enter closes the modal as a mouse-free shortcut.
+
+### Tests
+- `tests/test_item.gd` — round-trip, defensive parsing, slot constant distinctness.
+- `tests/test_item_catalog.gd` — registry membership (`coffee` and `mall_cap` both present), `get_item` for valid + invalid IDs, `has_item`, slot assignments, monotonic-cost sanity.
+- `tests/test_profile.gd` (extended) — purchase happy path, broke path, repeat-purchase guard, dict round-trip including `owned_items`, defensive parsing dedupes and filters non-strings.
+
+### Pre-push checklist (Phase 6)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0 (Main + ShopUI load without runtime errors in headless).
+- [x] GUT: 208/208 tests passing across 15 scripts (352 asserts), exit 0.
+
+### Known limitations
+- **Only Store 1 is wired.** Stores 2–6 still walk into a solid facade. Phase 7 themed packs will probably populate the others.
+- **Cosmetics aren't visible.** Mall Cap goes into your inventory but doesn't appear on the player model. Phase 8 art pass adds player hands + shadow + cosmetic rendering.
+- **No "equip" mechanic.** Cosmetics auto-take effect on purchase (currently no-op since rendering is deferred). Functional items are always-on while owned. Phase 8 may add slot-equip if multiple cosmetics ship.
+- **No "Reset Inventory" debug action.** `ProfileStore.delete_at_path` wipes the entire profile if you really need to start over.
+- **Check Letter is unlimited.** No per-day or per-puzzle quota — Phase 7 may add charges if balance demands it.
+- **Mall Cap doesn't do anything yet.** Bought, persisted, owned — visible-on-player is Phase 8.
+
+[0.6.0]: https://github.com/NickSanft/MallCross/releases/tag/v0.6.0
+
 ## [0.5.0] - 2026-05-22 — Phase 5: Persistent profile + Woints economy
 
 ### Added
@@ -327,5 +391,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.6.0...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1

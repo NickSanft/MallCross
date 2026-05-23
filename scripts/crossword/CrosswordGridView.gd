@@ -14,9 +14,11 @@ const COLOR_BORDER: Color = Color(0.55, 0.55, 0.55)
 const COLOR_CURSOR_BG: Color = Color(0.45, 0.75, 1.0)
 const COLOR_WORD_BG: Color = Color(0.84, 0.92, 1.0)
 const COLOR_CORRECT_BG: Color = Color(0.86, 0.96, 0.86)
+const COLOR_WRONG_BORDER: Color = Color(0.95, 0.20, 0.20)
 const COLOR_TEXT: Color = Color.BLACK
 const COLOR_TEXT_PENCIL: Color = Color(0.45, 0.45, 0.45)
 const COLOR_NUMBER: Color = Color(0.2, 0.2, 0.2)
+const WRONG_BORDER_THICKNESS: float = 3.0
 
 const NUMBER_FONT_SIZE: int = 11
 const LETTER_FONT_SIZE: int = 22
@@ -27,6 +29,7 @@ var cursor: CrosswordCursor
 var numbers: Array
 var show_correct_highlights: bool = false
 var _word_cell_set: Dictionary = {}
+var _wrong_cell_set: Dictionary = {}
 
 
 func render(p_grid: CrosswordGrid, p_state: CrosswordState, p_cursor: CrosswordCursor) -> void:
@@ -45,6 +48,16 @@ func _refresh_word_set() -> void:
 		return
 	for cell in cursor.current_word_cells():
 		_word_cell_set[_cell_key(cell["row"], cell["col"])] = true
+
+
+func set_wrong_cells(cells: Array) -> void:
+	# `cells` is an Array of Dictionary {"row": int, "col": int}. Pass an
+	# empty array to clear. The CrosswordUI calls this during a check-letter
+	# flash + clears it on the timer expiry.
+	_wrong_cell_set.clear()
+	for cell in cells:
+		_wrong_cell_set[_cell_key(int(cell["row"]), int(cell["col"]))] = true
+	queue_redraw()
 
 
 func _draw() -> void:
@@ -70,6 +83,12 @@ func _draw_cell(r: int, c: int) -> void:
 
 	draw_rect(rect, bg)
 	draw_rect(rect, COLOR_BORDER, false, BORDER_THICKNESS)
+
+	if _wrong_cell_set.has(_cell_key(r, c)):
+		# Inset the red border slightly so it sits inside the cell border.
+		var inset: float = WRONG_BORDER_THICKNESS * 0.5
+		var wrong_rect: Rect2 = Rect2(rect.position + Vector2(inset, inset), rect.size - Vector2(inset * 2.0, inset * 2.0))
+		draw_rect(wrong_rect, COLOR_WRONG_BORDER, false, WRONG_BORDER_THICKNESS)
 
 	var font: Font = get_theme_default_font()
 

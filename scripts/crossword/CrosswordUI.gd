@@ -21,6 +21,8 @@ var pencil_mode: bool = false
 var _solved_emitted: bool = false
 var _reward_amount: int = 0
 var _reward_already_taken: bool = false
+var _profile: Profile
+var _check_letter_timer: SceneTreeTimer
 var _grid_view: CrosswordGridView
 var _title_label: Label
 var _progress_label: Label
@@ -41,7 +43,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 
-func open_puzzle(puzzle: Dictionary, existing_state: CrosswordState = null, reward_amount: int = 0, reward_already_taken: bool = false) -> void:
+func open_puzzle(puzzle: Dictionary, existing_state: CrosswordState = null, reward_amount: int = 0, reward_already_taken: bool = false, profile: Profile = null) -> void:
 	grid = puzzle.get("grid", CrosswordGrid.new())
 	clues = puzzle.get("clues", [])
 	title = puzzle.get("title", "Crossword")
@@ -56,6 +58,8 @@ func open_puzzle(puzzle: Dictionary, existing_state: CrosswordState = null, rewa
 	pencil_mode = false
 	_reward_amount = max(0, reward_amount)
 	_reward_already_taken = reward_already_taken
+	_profile = profile
+	_clear_check_letter_flash()
 	# If we loaded an already-solved state, suppress the puzzle_solved signal
 	# so re-opening a solved puzzle doesn't re-fire it (GameController would
 	# otherwise try to double-award).
@@ -64,6 +68,7 @@ func open_puzzle(puzzle: Dictionary, existing_state: CrosswordState = null, rewa
 
 	visible = true
 	_redraw_all()
+	_update_footer()
 	_refresh_solved_banner()
 	grab_focus()
 
@@ -181,10 +186,21 @@ func _build_layout() -> void:
 	_footer_label = Label.new()
 	_footer_label.add_theme_font_size_override("font_size", 13)
 	_footer_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	_footer_label.text = "TAB toggle direction · P pencil · Arrows move · BACKSPACE clear · ESC exit"
+	_footer_label.text = _base_footer_text()
 	vbox.add_child(_footer_label)
 
 	_build_solved_banner()
+
+
+func _base_footer_text() -> String:
+	return "TAB toggle direction · P pencil · Arrows move · BACKSPACE clear · ESC exit"
+
+
+func _update_footer() -> void:
+	var text: String = _base_footer_text()
+	if _profile != null and _profile.owns("coffee"):
+		text += " · C check letter (Coffee)"
+	_footer_label.text = text
 
 
 func _build_solved_banner() -> void:
@@ -400,6 +416,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_P:
 			pencil_mode = not pencil_mode
 			_update_header()
+		KEY_C:
+			_check_letter()
 		KEY_ESCAPE:
 			close_puzzle()
 			accept_event()
@@ -424,3 +442,29 @@ func _backspace() -> void:
 	state.clear_cell(cursor.row, cursor.col)
 	_redraw_all()
 	_refresh_solved_banner()
+
+
+func _check_letter() -> void:
+	# Only available while the player owns Coffee. Flashes incorrect entries
+	# in the current word with a red border for 2 seconds.
+	if _profile == null or not _profile.owns("coffee"):
+		return
+	if cursor == null:
+		return
+	var wrong_cells: Array = []
+	for cell_pos in cursor.current_word_cells():
+		var r: int = int(cell_pos["row"])
+		var c: int = int(cell_pos["col"])
+		if state.is_blank(r, c):
+			continue
+		if state.entry_at(r, c) != grid.cell(r, c):
+			wrong_cells.append({"row": r, "col": c})
+	_grid_view.set_wrong_cells(wrong_cells)
+	_check_letter_timer = get_tree().create_timer(2.0)
+	_check_letter_timer.timeout.connect(_clear_check_letter_flash)
+
+
+func _clear_check_letter_flash() -> void:
+	_check_letter_timer = null
+	if _grid_view != null:
+		_grid_view.set_wrong_cells([])

@@ -135,15 +135,24 @@ func _build_corridor_endcap() -> void:
 func _build_store_fronts() -> void:
 	var z_positions: Array[float] = MallLayoutMath.store_z_positions(STORE_COUNT_PER_SIDE, STORE_WIDTH, STORE_GAP)
 	var sides: Array[int] = [-1, 1]
+	# Phase 6: only Store 1 is wired as an interactable shop. The others are
+	# decorative facades until Phase 7+ adds themed shops.
+	var shop_ids_by_store_number: Dictionary = {1: "mall_general"}
 	var label_index: int = 0
 	for side in sides:
 		var x: float = MallLayoutMath.store_front_x(side, CORRIDOR_WIDTH, STORE_FRONT_THICKNESS)
 		for i in range(z_positions.size()):
+			var store_number: int = label_index + 1
 			var color: Color = _store_front_colors[label_index % _store_front_colors.size()]
 			var size: Vector3 = Vector3(STORE_FRONT_THICKNESS, STORE_FRONT_HEIGHT, STORE_WIDTH)
 			var pos: Vector3 = Vector3(x, STORE_FRONT_HEIGHT * 0.5, z_positions[i])
-			add_child(_make_box("StoreFront_" + str(label_index + 1), pos, size, color))
-			_add_store_label(pos, side, str(label_index + 1))
+			var facade: StaticBody3D = _make_box("StoreFront_" + str(store_number), pos, size, color)
+			if shop_ids_by_store_number.has(store_number):
+				facade.add_to_group(Player.INTERACTION_GROUP)
+				facade.set_meta("shop_id", shop_ids_by_store_number[store_number])
+				facade.set_meta("shop_label", "Enter Store " + str(store_number))
+			add_child(facade)
+			_add_store_label(pos, side, str(store_number))
 			label_index += 1
 
 

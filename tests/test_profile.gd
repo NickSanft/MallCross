@@ -173,3 +173,111 @@ func test_from_dict_clamps_negative_woints() -> void:
 func test_from_dict_clamps_zero_day_to_one() -> void:
 	var restored: Profile = Profile.from_dict({"current_day": 0})
 	assert_eq(restored.current_day, 1)
+
+
+# ---- inventory ----
+
+
+func test_own_item_first_time_returns_true() -> void:
+	var profile: Profile = Profile.new()
+	assert_true(profile.own_item("coffee"))
+
+
+func test_own_item_repeat_returns_false() -> void:
+	var profile: Profile = Profile.new()
+	profile.own_item("coffee")
+	assert_false(profile.own_item("coffee"))
+
+
+func test_own_item_empty_id_ignored() -> void:
+	var profile: Profile = Profile.new()
+	assert_false(profile.own_item(""))
+	assert_false(profile.owns(""))
+
+
+func test_owns_false_by_default() -> void:
+	var profile: Profile = Profile.new()
+	assert_false(profile.owns("coffee"))
+
+
+func test_owns_true_after_own() -> void:
+	var profile: Profile = Profile.new()
+	profile.own_item("coffee")
+	assert_true(profile.owns("coffee"))
+
+
+func test_can_afford_with_sufficient_balance() -> void:
+	var profile: Profile = Profile.new()
+	profile.add_woints(100)
+	assert_true(profile.can_afford(50))
+
+
+func test_can_afford_at_exact_cost() -> void:
+	var profile: Profile = Profile.new()
+	profile.add_woints(50)
+	assert_true(profile.can_afford(50))
+
+
+func test_can_afford_false_when_short() -> void:
+	var profile: Profile = Profile.new()
+	profile.add_woints(20)
+	assert_false(profile.can_afford(50))
+
+
+func test_try_purchase_success_deducts_and_adds() -> void:
+	var profile: Profile = Profile.new()
+	profile.add_woints(100)
+	assert_true(profile.try_purchase("coffee", 40))
+	assert_eq(profile.woints, 60)
+	assert_true(profile.owns("coffee"))
+
+
+func test_try_purchase_fails_when_unaffordable_no_mutation() -> void:
+	var profile: Profile = Profile.new()
+	profile.add_woints(10)
+	assert_false(profile.try_purchase("coffee", 40))
+	assert_eq(profile.woints, 10)
+	assert_false(profile.owns("coffee"))
+
+
+func test_try_purchase_fails_when_already_owned() -> void:
+	var profile: Profile = Profile.new()
+	profile.add_woints(200)
+	profile.try_purchase("coffee", 40)
+	assert_false(profile.try_purchase("coffee", 40))
+	# Second purchase should not double-deduct
+	assert_eq(profile.woints, 160)
+
+
+func test_try_purchase_empty_id_fails() -> void:
+	var profile: Profile = Profile.new()
+	profile.add_woints(100)
+	assert_false(profile.try_purchase("", 40))
+
+
+func test_try_purchase_negative_cost_fails() -> void:
+	var profile: Profile = Profile.new()
+	profile.add_woints(100)
+	assert_false(profile.try_purchase("coffee", -10))
+
+
+func test_inventory_round_trips_through_dict() -> void:
+	var profile: Profile = Profile.new()
+	profile.add_woints(200)
+	profile.try_purchase("coffee", 40)
+	profile.try_purchase("mall_cap", 100)
+	var restored: Profile = Profile.from_dict(profile.to_dict())
+	assert_true(restored.owns("coffee"))
+	assert_true(restored.owns("mall_cap"))
+	assert_eq(restored.woints, 60)
+
+
+func test_inventory_dedupes_on_load() -> void:
+	# Defensive: bad save file with duplicate ids should not result in twice-owned.
+	var restored: Profile = Profile.from_dict({"owned_items": ["coffee", "coffee", "mall_cap"]})
+	assert_eq(restored.owned_items.size(), 2)
+
+
+func test_inventory_load_ignores_non_string_entries() -> void:
+	var restored: Profile = Profile.from_dict({"owned_items": ["coffee", 42, null, "mall_cap"]})
+	assert_eq(restored.owned_items, ["coffee", "mall_cap"])
