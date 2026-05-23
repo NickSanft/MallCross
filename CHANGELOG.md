@@ -4,6 +4,60 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-05-22 — Phase 10.1: MIDI + FULL puzzle tables (still 5x5 content)
+
+### Added
+- **`data/puzzles/mall_midi_day_one.json`** — 5x5 with SHARP / AROMA / FORGE across; SCARF / PLATE down. Real interlocking words, validator-clean.
+- **`data/puzzles/mall_full_day_one.json`** — 5x5 with TAKEN / UNDER / EARTH across; TRUCE / NORTH down. Real interlocking words, validator-clean.
+- **Multi-difficulty `PuzzleSchedule`**:
+  - Three separate schedules (`_MINI_SCHEDULE`, `_MIDI_SCHEDULE`, `_FULL_SCHEDULE`) so each tier solves independently. Solving MIDI day 1 doesn't mark MINI day 1 solved (different `puzzle_id`).
+  - `puzzle_id_for_day(day, difficulty = "mini")`, `has_puzzle_for_day`, `scheduled_days`, `last_scheduled_day` all take an optional `difficulty` arg.
+  - Difficulty constants: `DIFFICULTY_MINI`, `DIFFICULTY_MIDI`, `DIFFICULTY_FULL`. Case-insensitive lookup; unknown difficulties fall back to MINI.
+  - `all_difficulties()` for tests / future UI.
+- **`MallGreybox`**: MIDI and FULL tables are now `daily_puzzle` interactables (joining MINI). Each table stores its tier in a `difficulty` meta key (`"mini"` / `"midi"` / `"full"`) and gets the per-tier Woints reward (50 / 120 / 300) from `WointsConfig`.
+- **`GameController` dispatch**: reads `difficulty` from interactable metadata, passes it to `PuzzleSchedule.puzzle_id_for_day`. Prompt text now says `[E] Solve MINI Day N` / `[E] Solve MIDI Day N` / `[E] Solve FULL Day N` and reports tier-specific completion messages.
+- **`_last_seen_interactable` cache** on `GameController` so `_show_daily_puzzle_prompt` can re-render after out-of-band state changes (sleep transition, modal close) without re-routing through the Player.
+- **8 new `PuzzleSchedule` tests** in `tests/test_puzzle_schedule.gd`: MIDI / FULL day-1 lookups, day-2 returns empty for both, `last_scheduled_day` per difficulty, case-insensitive difficulty lookup, unknown-difficulty fallback, `all_difficulties` count, **meta-test that loads every scheduled puzzle across all three difficulties** (so adding a future schedule entry without a JSON file fails CI).
+- Total project test count: **298/298 across 21 scripts** (574 assertions).
+
+### Why it matters
+First time MIDI and FULL tables actually do anything. Player now has three distinct puzzles to solve on day 1 — MINI / MIDI / FULL — each paying its own reward (50 / 120 / 300 Woints, plus the streak bonus on first solves). A perfect day 1 across all three tiers earns **470 Woints** in a single in-game day (almost enough for a Mall Cap on its own).
+
+### Architecture
+- **Same dispatcher, new dimension.** The `daily_puzzle` interactable model gained a `difficulty` axis without changing the core flow — `GameController._open_puzzle` still takes a single `puzzle_id`, the schedule just resolves it per-tier now.
+- **Per-tier solve tracking.** Each tier's puzzle has a unique `puzzle_id` in the bundled JSON, so the Profile's `puzzles_solved` set distinguishes them. Solving MINI day 1 and MIDI day 1 are two separate entries.
+- **Sparse schedules are first-class.** MIDI and FULL ship with only day 1 entries; days 2-7 just return `""` and the prompt reads "more in a future update." No special-casing in the controller — same flow as MINI's "Week 1 complete" message.
+- **MINI hints stay MINI-only.** `HintRoster` still defaults to mini and only data/hints/mall_day_one..seven exist. MIDI and FULL puzzles deliberately ship without NPC hints — bigger puzzles ask for more independent solving. Phase 10.x could add per-difficulty hints if desired.
+
+### UX details
+- Walking up to the MIDI or FULL table now shows `[E] Solve MIDI Day 1` (or FULL). Solving it shows `+120 Woints` (or 300) plus the standard streak bonus.
+- Each tier's "no puzzle today" message says the tier name explicitly so a player whose schedule has gaps knows which tier they're missing.
+- All tables look identical visually (same `MINI` / `MIDI` / `FULL` labels from Phase 2). Phase 8.x art pass could re-color them to signal difficulty.
+
+### Honest caveat
+**All three puzzles are still 5x5.** The project's design memory calls for 15x15 NYT-style puzzles at the FULL tier, and ideally 9x9 at MIDI. Hand-authoring quality 9x9 / 15x15 puzzles takes hours per puzzle — significantly out of scope for a single commit cycle. Phase 10.1 ships the **architecture** (per-difficulty schedules, per-tier rewards, table-tier dispatch) so future content phases (Phase 10.2+) can drop real bigger-size puzzles into MIDI/FULL by editing one JSON file and one schedule line each.
+
+A **constraint-solver puzzle generator** (Phase 10.x candidate) would unlock proper 9x9 / 15x15 fill quality from a bundled wordlist. Tracked as a known limitation; ping if you want me to prioritize.
+
+### Tests
+- `tests/test_puzzle_schedule.gd` — extended from 11 to 19 tests covering all three difficulties + cross-difficulty meta-test.
+
+### Pre-push checklist (Phase 10.1)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on both new puzzles + all existing.
+- [x] GUT: 298/298 tests passing across 21 scripts (574 asserts), exit 0.
+
+### Known limitations
+- **All three tier puzzles are 5x5.** True 9x9 / 15x15 deferred (see "Honest caveat").
+- **MIDI and FULL have only day 1 puzzles.** Day 2+ shows "more in a future update."
+- **No hints for MIDI / FULL.** Hints currently MINI-only.
+- **Table appearance is identical** across tiers. Phase 8.x could color-code by difficulty.
+- **No "earn one of each per day" achievement / signal.** Just three separate solves with three separate rewards.
+
+[0.10.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.10.1
+
 ## [0.10.0] - 2026-05-22 — Phase 10: Settings menu + reset save
 
 ### Added
@@ -883,5 +937,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.10.1...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1

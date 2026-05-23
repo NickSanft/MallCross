@@ -277,12 +277,10 @@ func _build_food_court_tables() -> void:
 	var table_row_center: Vector3 = Vector3(0.0, 0.0, fc_z_center + 2.0)
 	var positions: Array[Vector3] = MallLayoutMath.food_court_table_positions(TABLE_COUNT, TABLE_SPACING, table_row_center)
 	var difficulty_labels: Array[String] = ["MINI", "MIDI", "FULL"]
-	# Phase 7.2: MINI is the "daily puzzle" table — it loads whichever puzzle
-	# PuzzleSchedule has for Profile.current_day. MIDI / FULL stay decorative
-	# until further-authored puzzle packs slot into the schedule.
-	var is_daily: Array[bool] = [true, false, false]
+	# Phase 10.1: all three tables are daily_puzzle interactables. PuzzleSchedule
+	# resolves the puzzle for each (difficulty, day) pair at interact time.
 	for i in range(positions.size()):
-		_build_table("Table_" + difficulty_labels[i], positions[i], difficulty_labels[i], is_daily[i])
+		_build_table("Table_" + difficulty_labels[i], positions[i], difficulty_labels[i], true)
 
 
 func _build_table(table_name: String, table_position: Vector3, label_text: String, daily_puzzle: bool = false) -> void:
@@ -296,6 +294,7 @@ func _build_table(table_name: String, table_position: Vector3, label_text: Strin
 	if daily_puzzle:
 		top.add_to_group(Player.INTERACTION_GROUP)
 		top.set_meta("daily_puzzle", true)
+		top.set_meta("difficulty", label_text.to_lower())
 		top.set_meta("woints_reward", WointsConfig.reward_for_difficulty(label_text))
 	table_root.add_child(top)
 

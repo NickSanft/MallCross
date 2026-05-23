@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "FULL Day One",
+	"author": "MallCross",
+	"theme": "Full-difficulty opening puzzle",
+	"size": 5,
+	"grid": [
+		"TAKEN",
+		"R###O",
+		"UNDER",
+		"C###T",
+		"EARTH"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Already claimed, like a seat"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Beneath; subordinate to"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Our planet; or soil"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Cease-fire agreement between rivals"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Direction the Big Dipper points toward"}
+	]
+}

@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "MIDI Day One",
+	"author": "MallCross",
+	"theme": "Middle-difficulty opening puzzle",
+	"size": 5,
+	"grid": [
+		"SHARP",
+		"C###L",
+		"AROMA",
+		"R###T",
+		"FORGE"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Acute, clever, or pointy"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Pleasant scent"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Blacksmith's workshop"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Long woven neck-warmer for winter"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Dish you eat off of"}
+	]
+}

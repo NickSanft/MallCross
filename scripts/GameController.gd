@@ -19,6 +19,9 @@ var _settings: Dictionary
 var _current_puzzle_id: String = ""
 var _current_reward: int = 0
 var _sleeping: bool = false
+# Cached target for re-rendering the daily-puzzle prompt out-of-band (e.g.
+# after a sleep transition refreshes the day-of-week).
+var _last_seen_interactable: Node = null
 
 
 func _ready() -> void:
@@ -99,6 +102,7 @@ func _refresh_hud() -> void:
 
 
 func _on_interactable_changed(interactable: Node) -> void:
+	_last_seen_interactable = interactable
 	if interactable == null:
 		_hud.hide_prompt()
 		return
@@ -115,18 +119,36 @@ func _on_interactable_changed(interactable: Node) -> void:
 
 
 func _show_daily_puzzle_prompt() -> void:
+	var interactable: Node = _player_current_interactable()
+	if interactable == null:
+		return
+	var difficulty: String = String(interactable.get_meta("difficulty", PuzzleSchedule.DIFFICULTY_MINI))
+	var label: String = difficulty.to_upper()
 	var day: int = _profile.current_day
-	var puzzle_id: String = PuzzleSchedule.puzzle_id_for_day(day)
+	var puzzle_id: String = PuzzleSchedule.puzzle_id_for_day(day, difficulty)
 	if puzzle_id == "":
-		var last_day: int = PuzzleSchedule.last_scheduled_day()
+		var last_day: int = PuzzleSchedule.last_scheduled_day(difficulty)
 		if day > last_day:
-			_hud.show_prompt("Week 1 complete — more puzzles in a future update")
+			_hud.show_prompt("%s puzzles complete for now — more in a future update" % label)
 		else:
-			_hud.show_prompt("No puzzle today — sleep to advance the day")
+			_hud.show_prompt("No %s puzzle today — sleep to advance the day" % label)
 	elif _profile.is_puzzle_solved(puzzle_id):
-		_hud.show_prompt("[E] Day %d Crossword (already solved)" % day)
+		_hud.show_prompt("[E] %s Day %d (already solved)" % [label, day])
 	else:
-		_hud.show_prompt("[E] Solve Day %d Crossword" % day)
+		_hud.show_prompt("[E] Solve %s Day %d" % [label, day])
+
+
+func _player_current_interactable() -> Node:
+	# Convenience: GameController.on_interactable_changed gets the node passed
+	# directly, but the daily prompt re-renders from inside other flows too
+	# (e.g. settings close), so we need a way to look up the current target.
+	# Re-emitting via Player.refresh_interaction_target() routes back through
+	# _on_interactable_changed below, which calls _show_daily_puzzle_prompt
+	# with no arg — so we read it from the Player's internal state.
+	# Player intentionally doesn't expose this directly; we plumb through the
+	# signal instead. This helper is set up so _on_interactable_changed can
+	# pass the node along.
+	return _last_seen_interactable
 
 
 func _on_interaction_triggered(interactable: Node) -> void:
@@ -135,9 +157,11 @@ func _on_interaction_triggered(interactable: Node) -> void:
 	if interactable.has_meta("puzzle_id"):
 		_open_puzzle(interactable, interactable.get_meta("puzzle_id"))
 	elif interactable.has_meta("daily_puzzle"):
-		var puzzle_id: String = PuzzleSchedule.puzzle_id_for_day(_profile.current_day)
+		var difficulty: String = String(interactable.get_meta("difficulty", PuzzleSchedule.DIFFICULTY_MINI))
+		var puzzle_id: String = PuzzleSchedule.puzzle_id_for_day(_profile.current_day, difficulty)
 		if puzzle_id == "":
-			# No puzzle scheduled for today — leave the prompt up, do nothing.
+			# No puzzle scheduled for today at this difficulty — leave the
+			# prompt up, do nothing.
 			return
 		_open_puzzle(interactable, puzzle_id)
 	elif interactable.has_meta("shop_id"):

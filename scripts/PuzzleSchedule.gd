@@ -1,14 +1,22 @@
 class_name PuzzleSchedule
 extends RefCounted
 
-# Maps an in-game day (1-indexed) to a puzzle ID from data/puzzles/. The
-# MINI food-court table looks this up at interact time — solving day N
-# unlocks the schedule's day N+1 entry on the next sleep.
+# Maps an in-game day (1-indexed) to a puzzle ID per difficulty tier. Each
+# food-court table looks this up at interact time — solving day N at one
+# difficulty doesn't affect the other tiers' day N puzzles.
 #
-# Phase 7.2 hardcodes the first two days. Phase 7.3+ may load this from
-# data/schedule.json so puzzle packs can ship without code changes.
+# Phase 10.1 ships:
+#   - MINI: full 7-day schedule (mall_day_one ... mall_day_seven)
+#   - MIDI: day 1 only (mall_midi_day_one)
+#   - FULL: day 1 only (mall_full_day_one)
+# Future phases extend MIDI and FULL with more days; the data structure is
+# already ready, no code changes needed.
 
-const _SCHEDULE: Dictionary = {
+const DIFFICULTY_MINI: String = "mini"
+const DIFFICULTY_MIDI: String = "midi"
+const DIFFICULTY_FULL: String = "full"
+
+const _MINI_SCHEDULE: Dictionary = {
 	1: "mall_day_one",
 	2: "mall_day_two",
 	3: "mall_day_three",
@@ -18,25 +26,47 @@ const _SCHEDULE: Dictionary = {
 	7: "mall_day_seven",
 }
 
+const _MIDI_SCHEDULE: Dictionary = {
+	1: "mall_midi_day_one",
+}
 
-static func puzzle_id_for_day(day: int) -> String:
+const _FULL_SCHEDULE: Dictionary = {
+	1: "mall_full_day_one",
+}
+
+
+static func puzzle_id_for_day(day: int, difficulty: String = DIFFICULTY_MINI) -> String:
 	if day <= 0:
 		return ""
-	return _SCHEDULE.get(day, "")
+	return _schedule_for_difficulty(difficulty).get(day, "")
 
 
-static func has_puzzle_for_day(day: int) -> bool:
-	return puzzle_id_for_day(day) != ""
+static func has_puzzle_for_day(day: int, difficulty: String = DIFFICULTY_MINI) -> bool:
+	return puzzle_id_for_day(day, difficulty) != ""
 
 
-static func scheduled_days() -> Array:
-	var days: Array = _SCHEDULE.keys()
+static func scheduled_days(difficulty: String = DIFFICULTY_MINI) -> Array:
+	var days: Array = _schedule_for_difficulty(difficulty).keys()
 	days.sort()
 	return days
 
 
-static func last_scheduled_day() -> int:
-	var days: Array = scheduled_days()
+static func last_scheduled_day(difficulty: String = DIFFICULTY_MINI) -> int:
+	var days: Array = scheduled_days(difficulty)
 	if days.is_empty():
 		return 0
 	return int(days[days.size() - 1])
+
+
+static func all_difficulties() -> Array:
+	return [DIFFICULTY_MINI, DIFFICULTY_MIDI, DIFFICULTY_FULL]
+
+
+static func _schedule_for_difficulty(difficulty: String) -> Dictionary:
+	match difficulty.to_lower():
+		DIFFICULTY_MIDI:
+			return _MIDI_SCHEDULE
+		DIFFICULTY_FULL:
+			return _FULL_SCHEDULE
+		_:
+			return _MINI_SCHEDULE
