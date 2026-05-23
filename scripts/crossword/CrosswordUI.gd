@@ -193,13 +193,13 @@ func _build_layout() -> void:
 
 
 func _base_footer_text() -> String:
-	return "TAB toggle direction · P pencil · Arrows move · BACKSPACE clear · ESC exit"
+	return "TAB toggle direction · ` pencil · Arrows move · BACKSPACE clear · ESC exit"
 
 
 func _update_footer() -> void:
 	var text: String = _base_footer_text()
 	if _profile != null and _profile.owns("coffee"):
-		text += " · C check letter (Coffee)"
+		text += " · / check letter (Coffee)"
 	_footer_label.text = text
 
 
@@ -413,10 +413,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_SPACE:
 			cursor.toggle_direction()
 			_redraw_all()
-		KEY_P:
+		KEY_QUOTELEFT:
+			# Backtick toggles pencil. Can't bind this to P — P is a valid
+			# letter (PUTTS, PEACH, etc.) and the unicode handler above
+			# would have consumed the event before we got here.
 			pencil_mode = not pencil_mode
 			_update_header()
-		KEY_C:
+		KEY_SLASH:
+			# Slash triggers check-letter. Same reasoning as above for C.
 			_check_letter()
 		KEY_ESCAPE:
 			close_puzzle()

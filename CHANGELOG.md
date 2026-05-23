@@ -4,6 +4,26 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-22 — Fix pencil + check-letter keybinds (don't shadow letter input)
+
+### Fixed
+- **Pencil toggle and check-letter were unreachable.** The Phase 4/6 keybinds (P for pencil, C for check-letter) sat in the `match` block after the A-Z letter handler, so pressing either key entered a letter into the current cell instead of triggering the action.
+
+### Changed
+- **Pencil**: now bound to **`** (backtick / KEY_QUOTELEFT) instead of P.
+- **Check letter** (Coffee): now bound to **/** (slash / KEY_SLASH) instead of C.
+- Footer hint updated: `TAB toggle direction · \` pencil · Arrows move · BACKSPACE clear · ESC exit` (plus `· / check letter (Coffee)` when Coffee is owned).
+
+### Why these keys
+P and C are both valid puzzle letters in the shipped `mall_day_one` (PUTTS, PEACH, AMIGO… `C` appears in PEACH and SCORE). Binding an action to a letter the player will frequently type creates an unfixable conflict — the action either consumes the keystroke (no letter typed) or it doesn't (no action). Backtick and slash never appear in crossword answers, exist on virtually every keyboard, and don't require modifiers.
+
+### Pre-push checklist
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] GUT: 220/220, exit 0 (no test changes — fix is UI-only).
+
+[0.7.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.7.1
+
 ## [0.7.0] - 2026-05-22 — Phase 7: Real puzzles + authoring validator
 
 ### Added
@@ -451,5 +471,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.7.1...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1
