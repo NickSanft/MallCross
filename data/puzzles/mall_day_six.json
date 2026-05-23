@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Six",
+	"author": "MallCross",
+	"theme": "Saturday spectacle",
+	"size": 5,
+	"grid": [
+		"FLOOD",
+		"L###R",
+		"ARENA",
+		"M###M",
+		"EXTRA"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Overflow of water"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Stadium for sports or concerts"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Additional; or a bit-part actor"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Burning fire"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Theatrical performance"}
+	]
+}

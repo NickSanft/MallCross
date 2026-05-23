@@ -27,16 +27,32 @@ func test_has_puzzle_true_for_scheduled() -> void:
 
 
 func test_has_puzzle_false_for_unscheduled() -> void:
-	assert_false(PuzzleSchedule.has_puzzle_for_day(3))
+	assert_false(PuzzleSchedule.has_puzzle_for_day(8))
 
 
 func test_scheduled_days_returns_sorted_list() -> void:
 	var days: Array = PuzzleSchedule.scheduled_days()
-	assert_eq(days, [1, 2])
+	assert_eq(days, [1, 2, 3, 4, 5, 6, 7])
 
 
 func test_last_scheduled_day_returns_max() -> void:
-	assert_eq(PuzzleSchedule.last_scheduled_day(), 2)
+	assert_eq(PuzzleSchedule.last_scheduled_day(), 7)
+
+
+func test_full_week_each_day_has_puzzle() -> void:
+	for day in range(1, 8):
+		assert_true(PuzzleSchedule.has_puzzle_for_day(day), "Day %d should have a puzzle scheduled" % day)
+
+
+func test_full_week_puzzle_ids_are_distinct() -> void:
+	var ids: Array = []
+	for day in PuzzleSchedule.scheduled_days():
+		ids.append(PuzzleSchedule.puzzle_id_for_day(day))
+	# Convert to a Dictionary to dedupe
+	var unique: Dictionary = {}
+	for id in ids:
+		unique[id] = true
+	assert_eq(unique.size(), ids.size(), "All scheduled days should map to distinct puzzle IDs")
 
 
 func test_every_scheduled_id_loads_a_real_puzzle() -> void:

@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Three",
+	"author": "MallCross",
+	"theme": "Midweek mall regulars",
+	"size": 5,
+	"grid": [
+		"ALONG",
+		"B###E",
+		"AGAIN",
+		"C###R",
+		"KNIFE"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Together with; in the company of"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Once more"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Cutting tool with a blade"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Caught off guard, as in 'taken ___'"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Category of music or film"}
+	]
+}

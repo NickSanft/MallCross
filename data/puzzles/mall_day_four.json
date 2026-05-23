@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Four",
+	"author": "MallCross",
+	"theme": "Stormy Thursday",
+	"size": 5,
+	"grid": [
+		"STORM",
+		"C###E",
+		"ABOUT",
+		"L###A",
+		"DECAL"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Tempest with thunder and rain"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Concerning; or roughly"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Sticker, often on a window"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Burn with hot liquid"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Iron, gold, or copper, e.g."}
+	]
+}

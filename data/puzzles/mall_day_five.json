@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Five",
+	"author": "MallCross",
+	"theme": "Friday flair",
+	"size": 5,
+	"grid": [
+		"BRASS",
+		"R###N",
+		"AROMA",
+		"C###R",
+		"ELITE"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Yellow alloy of copper and zinc"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Pleasant scent"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "The best of the best"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Pair; or orthodontic device"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Trap with a noose"}
+	]
+}

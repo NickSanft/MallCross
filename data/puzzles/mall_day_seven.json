@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Seven",
+	"author": "MallCross",
+	"theme": "Sunday wrap",
+	"size": 5,
+	"grid": [
+		"DARTS",
+		"O###P",
+		"ULTRA",
+		"B###D",
+		"TRIBE"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Pub game with feathered missiles"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Extreme prefix"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Group with shared ancestry"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Uncertainty"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Card suit, or a shovel"}
+	]
+}

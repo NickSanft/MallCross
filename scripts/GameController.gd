@@ -55,7 +55,11 @@ func _show_daily_puzzle_prompt() -> void:
 	var day: int = _profile.current_day
 	var puzzle_id: String = PuzzleSchedule.puzzle_id_for_day(day)
 	if puzzle_id == "":
-		_hud.show_prompt("No puzzle today — sleep to advance the day")
+		var last_day: int = PuzzleSchedule.last_scheduled_day()
+		if day > last_day:
+			_hud.show_prompt("Week 1 complete — more puzzles in a future update")
+		else:
+			_hud.show_prompt("No puzzle today — sleep to advance the day")
 	elif _profile.is_puzzle_solved(puzzle_id):
 		_hud.show_prompt("[E] Day %d Crossword (already solved)" % day)
 	else:

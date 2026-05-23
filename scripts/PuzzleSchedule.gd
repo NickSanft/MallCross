@@ -11,6 +11,11 @@ extends RefCounted
 const _SCHEDULE: Dictionary = {
 	1: "mall_day_one",
 	2: "mall_day_two",
+	3: "mall_day_three",
+	4: "mall_day_four",
+	5: "mall_day_five",
+	6: "mall_day_six",
+	7: "mall_day_seven",
 }
 
 

@@ -4,6 +4,54 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-05-22 — Phase 7.3: Full week of puzzles
+
+### Added
+- **`data/puzzles/mall_day_three.json`** — ALONG / AGAIN / KNIFE across; ABACK / GENRE down. Theme: "Midweek mall regulars."
+- **`data/puzzles/mall_day_four.json`** — STORM / ABOUT / DECAL across; SCALD / METAL down. Theme: "Stormy Thursday."
+- **`data/puzzles/mall_day_five.json`** — BRASS / AROMA / ELITE across; BRACE / SNARE down. Theme: "Friday flair."
+- **`data/puzzles/mall_day_six.json`** — FLOOD / ARENA / EXTRA across; FLAME / DRAMA down. Theme: "Saturday spectacle."
+- **`data/puzzles/mall_day_seven.json`** — DARTS / ULTRA / TRIBE across; DOUBT / SPADE down. Theme: "Sunday wrap."
+- **End-of-week prompt**: on day 8+ the MINI table now reads `"Week 1 complete — more puzzles in a future update"` instead of the generic "no puzzle today" message. Player gets a clean stopping point.
+- 2 new GUT tests in `tests/test_puzzle_schedule.gd`:
+  - `test_full_week_each_day_has_puzzle` — iterates days 1–7 and asserts each has a scheduled puzzle.
+  - `test_full_week_puzzle_ids_are_distinct` — ensures no day points at the same puzzle as another.
+
+### Changed
+- **`PuzzleSchedule._SCHEDULE`** extends to all seven days. The CI's puzzle-validate step ran clean on all seven `data/puzzles/*.json` files.
+
+### Why it matters
+A full week of distinct, validated puzzles. The streak counter can climb to 7 by solving every day in a row (with the bonus reaching `+30 Woints` on day 7's solve). Hitting day 8 gracefully tells the player they've finished the bundled content. The schedule data structure is unchanged — Phase 7.4+ adds more weeks the same way.
+
+### Architecture
+- All seven puzzles use the **same block pattern** as `mall_day_one` (blocks at `(1,1)(1,2)(1,3)(3,1)(3,2)(3,3)`). UI muscle memory stays consistent — players don't have to re-learn the grid shape each day.
+- **Themes are descriptive, not enforced.** The validator doesn't try to interpret theme; it's metadata for the player + future puzzle-archive UI.
+- **Numbering is identical across all seven puzzles** (1A / 3A / 4A / 1D / 2D) — Phase 8's polish pass could add per-puzzle quirks (longer answers, different shapes) once the painted-into-a-corner risk of 15x15 hand-authoring is solved.
+
+### UX details
+- Clue text varies in personality across the week (definition, slang, pop-culture) so puzzles don't feel mechanical.
+- Day labels in clue text would clash with the game's "Day N" UI; each puzzle's `title` is "Mall Day N" instead.
+- End-of-week prompt is intentionally promissory ("more puzzles in a future update") so the player knows the game is incomplete rather than broken.
+
+### Tests
+- All 7 puzzles validate clean via `tools/puzzle_validate.gd`.
+- 246/246 tests passing across 17 scripts (419 assertions). +12 assertions in `test_puzzle_schedule.gd` cover the expanded mapping.
+
+### Pre-push checklist (Phase 7.3)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] All 7 puzzles `OK` via `tools/puzzle_validate.gd`.
+- [x] GUT: 246/246 tests passing, exit 0.
+
+### Known limitations
+- **Still 5x5.** Hand-authoring 9x9 or 15x15 by hand is non-trivial; deferred to Phase 7.4+ if needed.
+- **No archive of past puzzles.** Once you've solved Day 3, you can't re-attempt it via a menu. Phase 10 polish could add a "puzzle archive" room or kiosk.
+- **No "Week 2" exists.** Player who burns through all 7 days will hit the end-of-week message permanently until more content ships.
+- **MIDI / FULL tables still decorative.** They could become a parallel difficulty track in a later phase.
+
+[0.7.4]: https://github.com/NickSanft/MallCross/releases/tag/v0.7.4
+
 ## [0.7.3] - 2026-05-22 — Phase 7.2: Daily puzzle rotation + 2nd puzzle
 
 ### Added
@@ -571,5 +619,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.7.4...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1
