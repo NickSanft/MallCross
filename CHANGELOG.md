@@ -4,6 +4,58 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-22 — Phase 9: Mall NPCs with proximity-triggered dialog
+
+### Added
+- **`scripts/NPC.gd` + `scenes/NPC.tscn`** — placed mall NPC built programmatically in `_ready`:
+  - `StaticBody3D` body with `CapsuleShape3D` collision so the player can't walk through.
+  - `CapsuleMesh` body (radius 0.3, height 1.6) + `BoxMesh` head (0.42³).
+  - Both use the Phase 8 PS1 vertex-snap shader (`ps1_box.gdshader`) with per-NPC body/head colors — they fit visually with the rest of the mall instead of looking like Unity grey-mannequins parked in a PS1 game.
+  - Billboarded `Label3D` speech bubble ~2.6 m above the floor, `no_depth_test = true` so it floats clean above geometry without z-fighting (same fix as the store labels).
+  - `Area3D` with a 4 m radius `SphereShape3D` trigger reveals the speech label on `body_entered(Player)` and hides on `body_exited(Player)`.
+- **`scripts/NPCRoster.gd`** — pure static list of 3 placed NPCs (id, position, facing, dialog, body color, head color):
+  - `food_court_patron_a` — sitting near the MIDI table: *"I always start with the down clues — they feel easier."*
+  - `food_court_patron_b` — sitting near the FULL table: *"The food court has the best ambient light for puzzling."*
+  - `corridor_shopper` — standing facing Store 1: *"That coffee from Store 1 is how I catch my typos."*
+  - `required_keys()` helper for tests that need to assert dict shape without duplicating the field list.
+- **`MallGreybox._spawn_npcs`** iterates the roster, instantiates `NPC.tscn` per entry, copies the data onto the instance, and positions/rotates it. Called once during the existing `_ready` chain.
+- **10 new GUT tests** in `tests/test_npc_roster.gd`: roster size, required-keys coverage, ID uniqueness + non-empty, dialog non-empty, positions inside mall bounds, ground-level y, facing normalized to [-360, 360], colors in [0,1], required-keys list contains the obvious fields.
+- Total project test count: **265/265 across 19 scripts** (498 assertions).
+
+### Why it matters
+The mall feels populated for the first time. Walking through the corridor or food court, you pass NPCs whose dialog only appears when you're close enough to "overhear" them — exactly the eavesdrop-clue UX the project memory called for in Phase 9. The infrastructure is now in place for Phase 9.1 to swap the flavor lines for per-day puzzle hints (e.g., "Today's 1-Across is a golf-bag staple" → hinting PUTTS).
+
+### Architecture
+- **NPC visuals built in code, not authored as a `.tscn`.** Same pattern as `MallGreybox`, `CrosswordUI`, `HUD` — keeps the `.tscn` to a single root + script, lets per-NPC color/dialog be a Dictionary lookup.
+- **Roster is pure data**, no node refs. Trivially testable; the `MallGreybox` spawner is the only consumer that walks the list. A Phase 9.1 swap to `data/npcs.json` is mechanical.
+- **Proximity detection via `Area3D.body_entered`**, not per-frame distance checks. Godot's physics broadphase does the work; the NPC script just toggles label visibility.
+- **NPCs are NOT in the `interactable` group.** The HUD prompt stays silent around them — eavesdropping is passive, not "press E to talk." That keeps interaction prompt real-estate clear for tables, shops, and the sleep cushion.
+- **Speech labels use `no_depth_test`** for the same reason as store labels — vertex wobble of the PS1 shader would otherwise z-fight the floating text. Lessons from `v0.8.1` reapplied.
+
+### UX details
+- Speech labels appear instantly on entry, vanish instantly on exit — no fade. Could become a fade-tween in a polish pass, but the abrupt toggle reads as "oh, I can hear them now" which matches the eavesdrop framing.
+- Bodies block the player so you can't run THROUGH NPCs, but you can walk all the way around them. The 4 m proximity radius is bigger than the capsule (0.3 m), so the speech triggers well before any physical contact.
+- NPCs face whatever direction the roster specifies (`facing_y_degrees`). For now the food court patrons face the corridor mouth (so you see them as you walk in); the corridor shopper faces Store 1 (looks like they're browsing).
+
+### Tests
+- `tests/test_npc_roster.gd` — 10 tests on the roster data: bound checks, required keys, uniqueness, color validity. The `NPC` scene itself isn't unit-tested (heavy on scene-tree behavior), but the 60-frame `Main.tscn` smoke-run boots all three NPCs without runtime errors.
+
+### Pre-push checklist (Phase 9)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0 (3 NPCs instantiate + integrate into physics without crashing).
+- [x] GUT: 265/265 tests passing across 19 scripts (498 asserts), exit 0.
+
+### Known limitations
+- **Static NPCs.** No wandering, no patrol, no idle animations. Phase 9.1+ could add a simple `target_position`-based wander.
+- **Dialog is hardcoded flavor**, not tied to today's puzzle. Phase 9.1 will wire a `data/hints/<puzzle_id>.json` lookup so NPCs hint at clue answers contextually.
+- **Each NPC has one line.** Could rotate through several, especially per-day.
+- **Same NPC body model for all three.** Just color swaps. Phase 8.x art pass could add hat / outfit variation, especially once the Mall Cap cosmetic actually renders on the player.
+- **No NPC audio.** Pure visual speech bubble. A future polish could add a low mumble loop near each NPC that fades in/out with proximity.
+- **Speech text doesn't wrap.** Long lines extend horizontally; current lines were authored to stay short.
+
+[0.9.0]: https://github.com/NickSanft/MallCross/releases/tag/v0.9.0
+
 ## [0.8.2] - 2026-05-22 — Phase 8.1: Procedural footstep audio
 
 ### Added
@@ -722,5 +774,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.9.0...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1

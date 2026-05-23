@@ -32,6 +32,7 @@ const PLAYER_SPAWN_Z_OFFSET: float = 3.0  # from entrance wall
 # sweet spot for a 5–40 m mall: noticeable jitter, no broken-looking geometry.
 const PS1_VERTEX_SNAP: float = 100.0
 const PS1_SHADER: Shader = preload("res://shaders/ps1_box.gdshader")
+const NPC_SCENE: PackedScene = preload("res://scenes/NPC.tscn")
 
 const FLOOR_COLOR: Color = Color(0.30, 0.30, 0.34)
 const CEILING_COLOR: Color = Color(0.78, 0.78, 0.74)
@@ -63,7 +64,22 @@ func _ready() -> void:
 	_build_food_court_walls()
 	_build_food_court_tables()
 	_build_sleep_cushion()
+	_spawn_npcs()
 	_position_player()
+
+
+func _spawn_npcs() -> void:
+	for npc_data in NPCRoster.all_npcs():
+		var npc: NPC = NPC_SCENE.instantiate()
+		npc.npc_id = npc_data["id"]
+		npc.dialog_text = npc_data["dialog"]
+		npc.body_color = npc_data["body_color"]
+		npc.head_color = npc_data["head_color"]
+		add_child(npc)
+		# Setting transform after add_child ensures the @export defaults on the
+		# NPC have already been applied; rotation/position then override.
+		npc.position = npc_data["position"]
+		npc.rotation_degrees = Vector3(0.0, float(npc_data["facing_y_degrees"]), 0.0)
 
 
 func _build_environment() -> void:
