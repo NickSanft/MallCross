@@ -52,6 +52,10 @@ var _store_front_colors: Array[Color] = [
 	Color(0.30, 0.62, 0.62),
 ]
 
+# npc_id -> NPC instance. Filled by _spawn_npcs so GameController can
+# refresh per-day dialog via apply_npc_hints_for_day.
+var _spawned_npcs: Dictionary = {}
+
 
 func _ready() -> void:
 	_build_environment()
@@ -80,6 +84,24 @@ func _spawn_npcs() -> void:
 		# NPC have already been applied; rotation/position then override.
 		npc.position = npc_data["position"]
 		npc.rotation_degrees = Vector3(0.0, float(npc_data["facing_y_degrees"]), 0.0)
+		_spawned_npcs[npc.npc_id] = npc
+
+
+func apply_npc_hints_for_day(current_day: int) -> void:
+	# Overrides each NPC's dialog with today's puzzle hint when one exists.
+	# NPCs without a hint for this day fall back to their flavor line — we
+	# explicitly re-apply the roster default to guarantee that's what shows.
+	var hints: Dictionary = HintRoster.hints_for_day(current_day)
+	for npc_data in NPCRoster.all_npcs():
+		var npc_id: String = String(npc_data["id"])
+		if not _spawned_npcs.has(npc_id):
+			continue
+		var npc: NPC = _spawned_npcs[npc_id]
+		var hint: String = String(hints.get(npc_id, ""))
+		if hint != "":
+			npc.set_dialog(hint)
+		else:
+			npc.set_dialog(String(npc_data["dialog"]))
 
 
 func _build_environment() -> void:

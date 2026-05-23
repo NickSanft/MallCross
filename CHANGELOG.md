@@ -4,6 +4,61 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-05-22 — Phase 9.1: Per-day puzzle hints in NPC dialog
+
+### Added
+- **`scripts/HintRoster.gd`** — loads NPC hint dialog from `data/hints/<puzzle_id>.json`. Resolves today's puzzle via `PuzzleSchedule`, returns a `{npc_id → hint_text}` dict. Defensive: missing file, malformed JSON, wrong shape, empty puzzle ID — all return `{}` and callers fall back to flavor dialog.
+- **7 hint files** under `data/hints/`, one per scheduled day:
+  - `mall_day_one.json` — hints toward PUTTS / SCORE / PEACH
+  - `mall_day_two.json` — SLOSH / HARDY / ALDER
+  - `mall_day_three.json` — ALONG / GENRE / ABACK
+  - `mall_day_four.json` — STORM / METAL / SCALD
+  - `mall_day_five.json` — BRASS / SNARE / ELITE
+  - `mall_day_six.json` — FLOOD / DRAMA / FLAME
+  - `mall_day_seven.json` — DARTS / SPADE / DOUBT
+  - Each NPC's line nudges toward one specific answer without spelling it out (e.g., `"I sank three short golf shots in a row at the course this morning."` → PUTTS).
+- **`MallGreybox._spawned_npcs`** — `{npc_id → NPC instance}` dict populated by `_spawn_npcs`. Lets `GameController` reach into the mall to update NPC dialog without re-spawning.
+- **`MallGreybox.apply_npc_hints_for_day(day)`** — iterates the roster, looks up today's hints, calls `npc.set_dialog(hint)` per NPC. NPCs with no hint for the day get the flavor default re-applied (idempotent — safe to call multiple times).
+- **`GameController._ready` calls `_mall.apply_npc_hints_for_day(_profile.current_day)`** after loading the profile, so the first time the player walks past an NPC they hear today's hint.
+- **`GameController._on_fade_to_black_done` re-applies hints** for the new day at the darkest point of the sleep transition — by the time the fade-back finishes, NPCs are saying tomorrow's lines.
+- **11 GUT tests** in `tests/test_hint_roster.gd`: 3-entry day-1 hint count, keys match NPC IDs, defensive returns on bad days (0, negative, beyond schedule), `hint_for(npc_id, day)` happy + sad paths, **meta-test ensuring every scheduled day has a hints file with at least one entry**, and a second meta-test ensuring every hint key in every file references a real NPC. Cross-file drift gets caught on the first push.
+- Total project test count: **276/276 across 20 scripts** (537 assertions).
+
+### Why it matters
+The eavesdrop-clue hint system from the original game design is now wired. Walking past the corridor shopper on day 1 reveals *"Georgia's state fruit always looks so fuzzy in the produce aisle"* — and PEACH is exactly the 1-Down answer for day 1's puzzle. Sleep to day 2 and the same NPC now mentions alder cones (3-Across is ALDER). Each day's three NPCs collectively hint at 3 of the 5 answers — enough to nudge a stuck player without taking the joy out of the solve.
+
+### Architecture
+- **Hint data is per-puzzle, not per-day-of-week.** Files key on `puzzle_id` so `PuzzleSchedule` can rearrange days without breaking hint linkage. The `mall_day_three.json` filename happens to match because that's how `PuzzleSchedule` currently maps day 3 — a future schedule shuffle automatically keeps hints attached to puzzles.
+- **`HintRoster` knows nothing about NPCs.** It's a flat key/value file loader. `NPCRoster` defines who the NPCs are; `HintRoster` defines what they might say. Combining them is `MallGreybox`'s job.
+- **`MallGreybox` is the only consumer that touches the NPC instances directly.** `GameController` just calls `apply_npc_hints_for_day`. Phase 9.2+ wandering NPCs would slot in here without controller changes.
+- **Re-application is destructive but cheap.** Each call resets every NPC's dialog from scratch (hint-or-flavor). Means there's no stale-dialog edge case after multiple sleeps or after the player leaves and re-enters the food court.
+
+### UX details
+- Hints are written in conversational English, not crossword-clue voice — they sound like things mall regulars would actually say.
+- Each NPC has a consistent "personality" across days:
+  - **patron_a** (blue, MIDI table) — talks about activities: golf, marching bands, theater clubs.
+  - **patron_b** (reddish-brown, FULL table) — talks about possessions / interests: books, tools, hunting traps.
+  - **corridor_shopper** (green, near Store 1) — talks about appearances / impressions: fruit colors, coffee burns, hat prices.
+- The fill-in-the-blank style (`"taken ___"`) is reserved for day-3 hints where it fits the answer (ABACK is hard to evoke otherwise).
+
+### Tests
+- `tests/test_hint_roster.gd` — direct API tests + two cross-file meta-tests catching drift between schedule, NPC roster, and hint files.
+- Existing puzzle-validate CI step is unchanged; hints aren't run through it (different validator rules). A future CI step could check JSON validity of `data/hints/*` too.
+
+### Pre-push checklist (Phase 9.1)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0 (hint application during `_ready` runs without error).
+- [x] GUT: 276/276 tests passing across 20 scripts (537 asserts), exit 0.
+
+### Known limitations
+- **One hint per NPC per day.** No randomized rotation, no escalating-specificity, no "you've heard this already" tracking. Phase 9.2+ could vary hints across approaches.
+- **Hints aren't validated against actual answers.** A bad hint pointing at a wrong cell would still pass — the validator only checks dict shape + roster cross-references. Could add a heuristic check ("does the hint mention the answer word?") but that's brittle.
+- **No "hint already given" audio cue.** Walking past the same NPC twice shows the same line both times.
+- **Hints aren't part of the puzzle JSON.** Kept as separate files for clear separation of concerns; means a Phase 7-style "drop in a new puzzle" requires two files now (puzzle + hints). The puzzle-validate CI step ensures puzzles are clean; hints are validated by the GUT meta-test.
+
+[0.9.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.9.1
+
 ## [0.9.0] - 2026-05-22 — Phase 9: Mall NPCs with proximity-triggered dialog
 
 ### Added
@@ -774,5 +829,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.9.1...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1

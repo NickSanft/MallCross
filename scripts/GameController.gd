@@ -8,6 +8,7 @@ extends Node3D
 # solve, and saves the profile to disk after every meaningful change.
 
 @onready var _player: Player = $MallGreybox/Player
+@onready var _mall: MallGreybox = $MallGreybox
 @onready var _hud: HUD = $HUD
 @onready var _crossword_ui: CrosswordUI = $CrosswordUI
 @onready var _shop_ui: ShopUI = $ShopUI
@@ -27,6 +28,9 @@ func _ready() -> void:
 	_crossword_ui.puzzle_solved.connect(_on_puzzle_solved)
 	_shop_ui.closed.connect(_on_shop_closed)
 	_hud.fade_to_black_done.connect(_on_fade_to_black_done)
+	# MallGreybox.spawn_npcs() ran inside its own _ready before us. Rewrite
+	# each NPC's dialog with today's puzzle hint where one exists.
+	_mall.apply_npc_hints_for_day(_profile.current_day)
 
 
 func _refresh_hud() -> void:
@@ -125,6 +129,9 @@ func _on_fade_to_black_done() -> void:
 	_profile.advance_day()
 	ProfileStore.save_to_path(_profile)
 	_refresh_hud()
+	# New day = new puzzle = new NPC hints. Push them before unpausing so the
+	# player sees the next puzzle's hints the moment they walk past an NPC.
+	_mall.apply_npc_hints_for_day(_profile.current_day)
 	# The fade-back will play; finish sleeping when it returns (next tick is fine).
 	_sleeping = false
 	_player.set_paused_for_ui(false)
