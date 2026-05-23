@@ -12,6 +12,14 @@ const HEAD_BOB_CYCLES_PER_METER: float = 0.5
 
 const INTERACTION_GROUP: String = "interactable"
 
+# Meters walked between footstep triggers. Tuned to feel natural at the
+# 5 m/s walk speed and 8.5 m/s sprint speed (≈3 steps/sec sprinting).
+const FOOTSTEP_DISTANCE: float = 1.8
+# Pitch jitter applied per step so footsteps don't sound mechanical.
+const FOOTSTEP_PITCH_MIN: float = 0.92
+const FOOTSTEP_PITCH_MAX: float = 1.08
+const FOOTSTEP_VOLUME_DB: float = -8.0
+
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera3D
 @onready var interaction_ray: RayCast3D = $CameraPivot/Camera3D/InteractionRay
@@ -20,6 +28,8 @@ var _bob_distance: float = 0.0
 var _camera_base_position: Vector3 = Vector3.ZERO
 var _paused_for_ui: bool = false
 var _current_interactable: Node = null
+var _footstep_player: AudioStreamPlayer3D = null
+var _last_footstep_distance: float = 0.0
 
 signal interactable_changed(interactable: Node)
 signal interaction_triggered(interactable: Node)
@@ -27,8 +37,19 @@ signal interaction_triggered(interactable: Node)
 
 func _ready() -> void:
 	_camera_base_position = camera.position
+	_setup_footstep_player()
 	if not OS.has_feature("headless"):
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _setup_footstep_player() -> void:
+	_footstep_player = AudioStreamPlayer3D.new()
+	_footstep_player.name = "FootstepPlayer"
+	_footstep_player.stream = FootstepAudio.make_footstep_stream()
+	_footstep_player.volume_db = FOOTSTEP_VOLUME_DB
+	# Player IS the source — keep audio simple, no spatial falloff math needed.
+	_footstep_player.unit_size = 1.0
+	add_child(_footstep_player)
 
 
 func set_paused_for_ui(paused: bool) -> void:
@@ -91,8 +112,18 @@ func _update_head_bob(delta: float) -> void:
 	var horizontal_speed: float = Vector2(velocity.x, velocity.z).length()
 	if is_on_floor() and horizontal_speed > 0.1:
 		_bob_distance += horizontal_speed * delta
+		if _bob_distance - _last_footstep_distance >= FOOTSTEP_DISTANCE:
+			_last_footstep_distance = _bob_distance
+			_play_footstep()
 	var bob_t: float = _bob_distance * HEAD_BOB_CYCLES_PER_METER
 	camera.position = _camera_base_position + MovementMath.head_bob_offset(bob_t, HEAD_BOB_AMPLITUDE)
+
+
+func _play_footstep() -> void:
+	if _footstep_player == null:
+		return
+	_footstep_player.pitch_scale = randf_range(FOOTSTEP_PITCH_MIN, FOOTSTEP_PITCH_MAX)
+	_footstep_player.play()
 
 
 func _update_interaction_target() -> void:

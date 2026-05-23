@@ -4,6 +4,46 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-05-22 — Phase 8.1: Procedural footstep audio
+
+### Added
+- **`scripts/FootstepAudio.gd`** — synthesizes a footstep "thump" `AudioStreamWAV` at runtime. 22.05 kHz mono 16-bit, 60 ms duration, single-pole IIR-low-passed white noise with an exponential decay envelope (`exp(-t * 40)`). Deterministic via a fixed seed so the same sound plays every time; total cost is ~2.6 KB of computed PCM data — no binary audio asset shipped.
+- **`AudioStreamPlayer3D` on the Player** created in `_ready` (programmatic — keeps `Player.tscn` untouched). Stream is the procedural footstep, base volume `-8 dB`, `unit_size = 1.0`.
+- **Step detection in `_update_head_bob`**: reuses the existing `_bob_distance` accumulator (which already tracks ground-truth meters walked, freezing when standing still or in the air). Every `FOOTSTEP_DISTANCE = 1.8 m` the player crosses, `_play_footstep` fires. Pitch is randomized per step in `[0.92, 1.08]` so consecutive footfalls don't sound mechanical.
+- **9 new GUT tests** in `tests/test_footstep_audio.gd`: non-null + correct format / mix rate / channel count, data length matches the duration × sample rate computation, mid-envelope sample is non-zero (synth pipeline is alive), end-of-envelope sample is smaller than early-envelope (decay works), deterministic output (same seed → identical PCM data on repeat calls).
+- Total project test count: **255/255 across 18 scripts** (428 assertions).
+
+### Why it matters
+The mall finally **sounds** like you're walking through it. Combined with Phase 8's vertex wobble + fog, the lo-fi PS1 vibe is now in both eyes and ears. Sprinting visibly + audibly speeds the step cadence; standing still goes silent.
+
+### Architecture
+- **No binary audio asset.** Synthesizing the footstep at startup keeps the repo lean and means a future "settings → footstep volume" or "themed alternate footstep" change is a one-line code edit, not an asset re-roll.
+- **Step trigger lives on the same accumulator as head-bob.** One source of truth for "how far did the player walk this physics frame" — head-bob and footstep stay perfectly in sync, and pausing for a UI modal pauses both.
+- **AudioStreamPlayer3D, not 2D.** The player IS the source, so spatial falloff is irrelevant in practice — but the 3D variant lets a future "NPC footsteps" feature drop the same generator into other characters without architectural changes.
+- **Pitch randomization is uniform, not curve-shaped.** Tested by ear at ±8% — wider feels artificial, tighter sounds robotic. Easy dial if it needs tweaking.
+
+### UX details
+- Sprinting (Shift) doubles cadence vs. walking, exactly as you'd expect — same step distance, faster traversal.
+- Jumping silences mid-air (the accumulator only advances when `is_on_floor()` and horizontal speed > 0.1).
+- Modal open (puzzle / shop / sleep transition) → physics paused → no spurious footsteps during a fade.
+
+### Tests
+- `tests/test_footstep_audio.gd` — format/rate sanity, data-size math, envelope decay verification, determinism. Headless-friendly: tests inspect the PCM byte buffer directly, no audio device required.
+
+### Pre-push checklist (Phase 8.1)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0 (audio system initializes silently in headless).
+- [x] GUT: 255/255 tests passing across 18 scripts (428 asserts), exit 0.
+
+### Known limitations
+- **One footstep sound for all surfaces.** Floor, food court tile, sleep cushion — same thump. Future polish could swap stream by ground type via a raycast under the player.
+- **No surface volume variance.** Carpet would feel quieter than tile in a real mall; current build is flat-volume.
+- **No "first step heavier" or "stop sound."** Real footsteps have transient differences when accelerating; this is a steady 1.8m cadence.
+- **Mall has no other ambient audio yet** — no music, no crowd murmur, no shop chime. Phase 9 (NPCs) likely brings ambience.
+
+[0.8.2]: https://github.com/NickSanft/MallCross/releases/tag/v0.8.2
+
 ## [0.8.1] - 2026-05-22 — Fix Label3D flicker against vertex-snapped facades
 
 ### Fixed
@@ -682,5 +722,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.8.2...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1
