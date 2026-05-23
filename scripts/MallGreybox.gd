@@ -180,6 +180,10 @@ func _add_store_label(facade_pos: Vector3, side: int, store_number: String) -> v
 	label.position = facade_pos + Vector3(-float(side) * (STORE_FRONT_THICKNESS * 0.5 + 0.02), STORE_FRONT_HEIGHT * 0.25, 0.0)
 	label.rotation_degrees = Vector3(0.0, -90.0 * float(side), 0.0)
 	label.pixel_size = 0.005
+	# PS1 vertex snap jiggles facade vertices in NDC space (~7 cm at typical
+	# viewing distance). Without no_depth_test, the label and the facade
+	# behind it z-fight every frame as the wobble crosses the small clearance.
+	label.no_depth_test = true
 	add_child(label)
 
 
@@ -224,6 +228,7 @@ func _build_sleep_cushion() -> void:
 	label.position = cushion_position + Vector3(0.0, 0.9, 0.0)
 	label.pixel_size = 0.005
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
 	add_child(label)
 
 
@@ -277,6 +282,7 @@ func _build_table(table_name: String, table_position: Vector3, label_text: Strin
 	hover_label.position = Vector3(0.0, TABLE_TOP_HEIGHT + 0.9, 0.0)
 	hover_label.pixel_size = 0.005
 	hover_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	hover_label.no_depth_test = true
 	table_root.add_child(hover_label)
 
 

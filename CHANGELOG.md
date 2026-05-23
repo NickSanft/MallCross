@@ -4,6 +4,24 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-05-22 — Fix Label3D flicker against vertex-snapped facades
+
+### Fixed
+- **Store-front, food-court, and sleep-cushion labels flickered violently when walking around.** Root cause: Phase 8's PS1 vertex-snap shader jitters facade vertices in NDC space — at typical viewing distance that's ~7 cm of world-space wobble, which crossed the tiny 2 cm clearance between each store label and the facade behind it. Every frame the label and the facade alternated which one passed the depth test, producing pixel-level strobing across the glyph edges.
+
+### Changed
+- Every `Label3D` in `MallGreybox` (store names, MINI/MIDI/FULL table labels, SLEEP cushion label) now sets `no_depth_test = true`. Labels always render on top of 3D geometry regardless of the depth buffer — wobble can no longer "hide" them.
+
+### Trade-off
+Labels are now visible through any geometry that would otherwise occlude them. In the current closed-corridor mall this is invisible to the player (you can't get behind a store-front to see its label through a wall). If a future open-mall layout exposes a viewing angle where this matters, the fix is to add a small per-label `outline_size` and rely on outline-on-fog rather than depth comparison.
+
+### Pre-push checklist
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] GUT: 246/246, exit 0 (no test changes — fix is property-only).
+
+[0.8.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.8.1
+
 ## [0.8.0] - 2026-05-22 — Phase 8: PS1/N64 art pass (vertex snap + atmospheric fog)
 
 ### Added
@@ -664,5 +682,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.8.1...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1
