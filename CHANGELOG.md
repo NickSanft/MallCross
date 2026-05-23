@@ -4,6 +4,59 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-05-22 — Phase 7.1: Day advancement + streak bonus
+
+### Added
+- **Sleep cushion** in the food court back wall (purple box with a billboarded "SLEEP" label). Walking up to it shows `[E] Sleep — advance to next day`. Pressing E triggers a half-second fade to black, advances `Profile.current_day`, saves the profile, and fades back in.
+- **Streak tracking on `Profile`**:
+  - `streak: int` (consecutive-day solve count, starts at 0).
+  - `last_solved_day: int` (in-game day of the most recent first-solve, starts at 0).
+  - `mark_puzzle_solved` now updates streak math: first-ever solve = 1; same-day repeat first-solve doesn't change it; solving on day N+1 right after day N increments by 1; gap > 1 day resets to 1; already-solved attempts have no effect.
+  - Both fields round-trip through `to_dict` / `from_dict` with defensive clamping (negatives → 0).
+- **Streak bonus** via `WointsConfig.streak_bonus(streak)`. Formula: `max(0, streak - 1) * STREAK_BONUS_PER_DAY` (5). Day 1 of a streak = no bonus; day 2 = +5; day 5 = +20. Applied on top of the base difficulty reward at puzzle-solved time. `GameController._on_puzzle_solved` now awards `base + bonus` and saves.
+- **HUD streak indicator**: a small orange label below the Day counter showing "Streak: N days" when `N > 1`. Hidden at streak 0/1 so it doesn't clutter the early game.
+- **HUD fade overlay** (`HUD.fade_to_black_and_back`): a full-screen `ColorRect` driven by a `Tween` (0.5s fade in → callback → 0.5s fade out). Exposes a `fade_to_black_done` signal so `GameController` can advance the day at the darkest point.
+- **`sleep_action` interactable metadata** as a third dispatch branch alongside `puzzle_id` and `shop_id`. `GameController._on_interaction_triggered` routes to `_start_sleep`. While sleeping, further interactions are ignored.
+- **GUT tests**:
+  - `tests/test_profile.gd` (+10 streak tests): default 0, first solve → 1, consecutive +1, 4-day streak, same-day no change, skipped day resets, repeat-solve no change, dict round-trip, defensive clamping.
+  - `tests/test_woints_config.gd` (+4 streak_bonus tests): zero at streak 1, +5 at streak 2, linear scaling, zero/negative inputs.
+- Total project test count: **234/234 across 16 scripts** (387 assertions).
+
+### Why it matters
+The daily-puzzle game loop has a turn now. Solve → sleep → next day → (eventually) next puzzle. Until Phase 7.2 lands more authored content, the player can re-solve `mall_day_one` only once for Woints, but advancing the day works visibly via the fade-to-black transition and the HUD day counter. The streak machinery is fully wired and tested; the moment a second puzzle exists (Phase 7.2 9x9, or 7.3 15x15), solving across consecutive days starts paying bonus Woints automatically.
+
+### Architecture
+- **Streak math lives on `Profile`**, not `GameController`. The streak update is part of `mark_puzzle_solved` so it's atomic with the solved-set mutation — there's no way to fire one without the other.
+- **Sleep is a dispatch destination, not a top-level system**. The interaction system already routes by metadata key; sleep just adds a third metadata namespace. Future interactables (read-a-book, eat-at-counter, talk-to-NPC) plug in the same way.
+- **Fade transition is HUD's responsibility, not GameController's**. The HUD owns the screen-space `ColorRect` already; adding the tween to it keeps the controller free of UI nodes. `GameController` just calls `fade_to_black_and_back()` and listens for `fade_to_black_done`.
+- **Sleeping is gated by a single `_sleeping` flag** rather than the existing `set_paused_for_ui` because UI-pause flips the mouse mode and we don't want the mouse to become visible during a sleep — the player isn't interacting with anything visible. Sleep still calls `set_paused_for_ui(true)` for consistency, but the gate prevents re-entry.
+
+### UX details
+- Sleep cushion is purple so it visually pops against the neutral food court walls — discoverable without a tutorial.
+- Fade is 0.5s each direction; total 1.0s feels like an in-game time skip without dragging.
+- Streak label uses orange so it's distinct from the yellow Woints counter and blue Day counter.
+- Streak hidden at 0/1 — first-time players don't see noise; the indicator appears as a reward.
+- Sleeping during an open modal (puzzle / shop) isn't possible since interaction is gated. Closing the modal first is the natural flow.
+
+### Tests
+- Profile streak: all transition cases (zero / first / same-day / consecutive / gap / repeat-no-op) plus serialization round-trip and defensive parsing.
+- Streak bonus: edge cases (streak 0, 1, 2, large), monotonic with day count.
+
+### Pre-push checklist (Phase 7.1)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0 (sleep cushion + Tween initialize without error in headless).
+- [x] GUT: 234/234 tests passing across 16 scripts (387 asserts), exit 0.
+
+### Known limitations
+- **Only one puzzle in the game** (`mall_day_one`). You can solve once on day 1 (streak 1), sleep to day 2, sleep to day 3, etc., but there's nothing else to solve. Phase 7.2 fixes this by hand-authoring the MIDI 9x9.
+- **No "puzzle-of-the-day" gating yet.** Puzzles aren't tied to specific days — `mall_day_one` is available regardless of `current_day`. Phase 7.3 may add daily rotation if it improves the game-feel.
+- **Sleep is instant.** No time-of-day cycle, no morning music, no animation beyond the fade. Phase 8 polish.
+- **No "Cancel Sleep" option.** Pressing E on the cushion commits to the day-advance. Fine for now (it's a small action) but could be a confirmation prompt later.
+- **Streak displayed but not celebrated.** Hitting a 7-day streak doesn't trigger any special VFX. Phase 8 polish.
+
+[0.7.2]: https://github.com/NickSanft/MallCross/releases/tag/v0.7.2
+
 ## [0.7.1] - 2026-05-22 — Fix pencil + check-letter keybinds (don't shadow letter input)
 
 ### Fixed
@@ -471,5 +524,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.7.2...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1

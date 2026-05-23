@@ -281,3 +281,84 @@ func test_inventory_dedupes_on_load() -> void:
 func test_inventory_load_ignores_non_string_entries() -> void:
 	var restored: Profile = Profile.from_dict({"owned_items": ["coffee", 42, null, "mall_cap"]})
 	assert_eq(restored.owned_items, ["coffee", "mall_cap"])
+
+
+# ---- streak ----
+
+
+func test_streak_zero_by_default() -> void:
+	var profile: Profile = Profile.new()
+	assert_eq(profile.streak, 0)
+	assert_eq(profile.last_solved_day, 0)
+
+
+func test_first_solve_sets_streak_to_one() -> void:
+	var profile: Profile = Profile.new()
+	profile.mark_puzzle_solved("a")
+	assert_eq(profile.streak, 1)
+	assert_eq(profile.last_solved_day, 1)
+
+
+func test_consecutive_day_solve_increments_streak() -> void:
+	var profile: Profile = Profile.new()
+	profile.mark_puzzle_solved("a")  # day 1, streak -> 1
+	profile.advance_day()             # day 2
+	profile.mark_puzzle_solved("b")
+	assert_eq(profile.streak, 2)
+	assert_eq(profile.last_solved_day, 2)
+
+
+func test_streak_continues_across_multiple_days() -> void:
+	var profile: Profile = Profile.new()
+	for puzzle_id in ["a", "b", "c", "d"]:
+		profile.mark_puzzle_solved(puzzle_id)
+		profile.advance_day()
+	# After 4 consecutive solves: streak = 4
+	assert_eq(profile.streak, 4)
+
+
+func test_same_day_second_solve_does_not_change_streak() -> void:
+	var profile: Profile = Profile.new()
+	profile.mark_puzzle_solved("a")
+	profile.mark_puzzle_solved("b")  # same day; streak unchanged
+	assert_eq(profile.streak, 1)
+
+
+func test_skipped_day_resets_streak() -> void:
+	var profile: Profile = Profile.new()
+	profile.mark_puzzle_solved("a")  # day 1
+	profile.advance_day()
+	profile.advance_day()             # jump to day 3 (skipped day 2)
+	profile.mark_puzzle_solved("b")
+	assert_eq(profile.streak, 1)
+
+
+func test_repeat_solve_attempt_does_not_change_streak() -> void:
+	var profile: Profile = Profile.new()
+	profile.mark_puzzle_solved("a")
+	profile.advance_day()
+	profile.mark_puzzle_solved("a")  # already solved; no-op
+	# Streak should NOT advance because this wasn't a first-solve.
+	assert_eq(profile.streak, 1)
+	assert_eq(profile.last_solved_day, 1)
+
+
+func test_streak_and_last_solved_day_round_trip_via_dict() -> void:
+	var profile: Profile = Profile.new()
+	profile.mark_puzzle_solved("a")
+	profile.advance_day()
+	profile.mark_puzzle_solved("b")
+	# streak = 2, last_solved_day = 2
+	var restored: Profile = Profile.from_dict(profile.to_dict())
+	assert_eq(restored.streak, 2)
+	assert_eq(restored.last_solved_day, 2)
+
+
+func test_from_dict_clamps_negative_streak() -> void:
+	var restored: Profile = Profile.from_dict({"streak": -5})
+	assert_eq(restored.streak, 0)
+
+
+func test_from_dict_clamps_negative_last_solved_day() -> void:
+	var restored: Profile = Profile.from_dict({"last_solved_day": -3})
+	assert_eq(restored.last_solved_day, 0)

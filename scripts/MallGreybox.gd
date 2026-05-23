@@ -57,6 +57,7 @@ func _ready() -> void:
 	_build_store_fronts()
 	_build_food_court_walls()
 	_build_food_court_tables()
+	_build_sleep_cushion()
 	_position_player()
 
 
@@ -187,6 +188,31 @@ func _build_food_court_walls() -> void:
 	var shoulder_z: float = CORRIDOR_LENGTH * 0.5 + WALL_THICKNESS * 0.5
 	add_child(_make_box("FoodCourtShoulderWest", Vector3(-CORRIDOR_WIDTH * 0.5 - shoulder_width * 0.5, WALL_HEIGHT * 0.5, shoulder_z), shoulder_size, FOOD_COURT_WALL_COLOR))
 	add_child(_make_box("FoodCourtShoulderEast", Vector3(CORRIDOR_WIDTH * 0.5 + shoulder_width * 0.5, WALL_HEIGHT * 0.5, shoulder_z), shoulder_size, FOOD_COURT_WALL_COLOR))
+
+
+func _build_sleep_cushion() -> void:
+	# A purple cushion against the food court back wall. Interacting with it
+	# advances Profile.current_day via GameController._start_sleep.
+	var fc_z_back: float = CORRIDOR_LENGTH * 0.5 + FOOD_COURT_DEPTH
+	var cushion_position: Vector3 = Vector3(0.0, 0.30, fc_z_back - 1.4)
+	var cushion_size: Vector3 = Vector3(2.4, 0.60, 1.4)
+	var cushion: StaticBody3D = _make_box("SleepCushion", cushion_position, cushion_size, Color(0.45, 0.30, 0.65))
+	cushion.add_to_group(Player.INTERACTION_GROUP)
+	cushion.set_meta("sleep_action", "advance_day")
+	cushion.set_meta("sleep_label", "Sleep — advance to next day")
+	add_child(cushion)
+
+	# Hover label so the player can spot it.
+	var label: Label3D = Label3D.new()
+	label.text = "SLEEP"
+	label.font_size = 140
+	label.modulate = Color(1.0, 0.85, 1.0)
+	label.outline_size = 8
+	label.outline_modulate = Color.BLACK
+	label.position = cushion_position + Vector3(0.0, 0.9, 0.0)
+	label.pixel_size = 0.005
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	add_child(label)
 
 
 func _build_food_court_tables() -> void:

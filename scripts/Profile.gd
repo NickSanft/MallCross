@@ -18,6 +18,12 @@ var current_day: int = DEFAULT_DAY
 var puzzles_solved: Dictionary = {}
 # Item IDs (from ItemCatalog) the player has purchased. Order = purchase order.
 var owned_items: Array = []
+# Consecutive-day solve streak. 0 = never solved; 1 = solved at least once;
+# increments each time a first-solve happens on the day after the previous
+# first-solve. Resets to 1 if the gap is > 1 day.
+var streak: int = 0
+# Day on which the most recent first-solve happened. 0 = never solved.
+var last_solved_day: int = 0
 
 # puzzle_id -> CrosswordState (in-memory). Serialized via CrosswordSerializer
 # at to_dict() time so we keep one source of truth for the on-disk shape.
@@ -31,10 +37,31 @@ func add_woints(amount: int) -> void:
 func mark_puzzle_solved(puzzle_id: String) -> bool:
 	# Returns true if this is the first time the puzzle has been solved (so
 	# the caller knows to award Woints). Returns false on repeat solves.
+	# Also updates `streak` and `last_solved_day` for the first-solve case.
 	if puzzle_id == "" or puzzles_solved.has(puzzle_id):
 		return false
+	_update_streak_on_solve()
 	puzzles_solved[puzzle_id] = {"first_solved_day": current_day}
 	return true
+
+
+func _update_streak_on_solve() -> void:
+	# Called inside mark_puzzle_solved(), before puzzles_solved is mutated.
+	# Rules:
+	#   - First solve ever                 -> streak = 1
+	#   - Another first-solve same day     -> streak unchanged
+	#   - First-solve on day after         -> streak += 1
+	#   - Gap > 1 day                      -> streak resets to 1
+	if last_solved_day == 0:
+		streak = 1
+	elif current_day == last_solved_day:
+		# Another first-solve on the same in-game day — no streak change.
+		pass
+	elif current_day == last_solved_day + 1:
+		streak += 1
+	else:
+		streak = 1
+	last_solved_day = current_day
 
 
 func is_puzzle_solved(puzzle_id: String) -> bool:
@@ -106,6 +133,8 @@ func to_dict() -> Dictionary:
 		"version": FORMAT_VERSION,
 		"woints": woints,
 		"current_day": current_day,
+		"streak": streak,
+		"last_solved_day": last_solved_day,
 		"puzzles_solved": puzzles_solved.duplicate(true),
 		"owned_items": owned_items.duplicate(),
 		"puzzle_states": states_payload,
@@ -117,6 +146,8 @@ static func from_dict(payload: Dictionary) -> Profile:
 	profile.version = int(payload.get("version", 0))
 	profile.woints = max(0, int(payload.get("woints", DEFAULT_WOINTS)))
 	profile.current_day = max(1, int(payload.get("current_day", DEFAULT_DAY)))
+	profile.streak = max(0, int(payload.get("streak", 0)))
+	profile.last_solved_day = max(0, int(payload.get("last_solved_day", 0)))
 	profile.puzzles_solved = payload.get("puzzles_solved", {}).duplicate(true) if payload.get("puzzles_solved") is Dictionary else {}
 	var raw_items: Variant = payload.get("owned_items", [])
 	if raw_items is Array:

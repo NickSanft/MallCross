@@ -2,9 +2,10 @@ class_name GameController
 extends Node3D
 
 # Top-level orchestrator. Loads the Profile on startup, dispatches Player
-# interaction signals to either the CrosswordUI (puzzle_id metadata) or
-# ShopUI (shop_id metadata), awards Woints on first puzzle solve, and
-# saves the profile to disk after every meaningful change.
+# interaction signals to either the CrosswordUI (puzzle_id metadata), the
+# ShopUI (shop_id metadata), or the day-advance sleep transition
+# (sleep_action metadata), awards Woints + streak bonus on first puzzle
+# solve, and saves the profile to disk after every meaningful change.
 
 @onready var _player: Player = $MallGreybox/Player
 @onready var _hud: HUD = $HUD
@@ -14,17 +15,24 @@ extends Node3D
 var _profile: Profile
 var _current_puzzle_id: String = ""
 var _current_reward: int = 0
+var _sleeping: bool = false
 
 
 func _ready() -> void:
 	_profile = ProfileStore.load_from_path()
-	_hud.update_woints(_profile.woints)
-	_hud.update_day(_profile.current_day)
+	_refresh_hud()
 	_player.interactable_changed.connect(_on_interactable_changed)
 	_player.interaction_triggered.connect(_on_interaction_triggered)
 	_crossword_ui.closed.connect(_on_crossword_closed)
 	_crossword_ui.puzzle_solved.connect(_on_puzzle_solved)
 	_shop_ui.closed.connect(_on_shop_closed)
+	_hud.fade_to_black_done.connect(_on_fade_to_black_done)
+
+
+func _refresh_hud() -> void:
+	_hud.update_woints(_profile.woints)
+	_hud.update_day(_profile.current_day)
+	_hud.update_streak(_profile.streak)
 
 
 func _on_interactable_changed(interactable: Node) -> void:
@@ -35,17 +43,21 @@ func _on_interactable_changed(interactable: Node) -> void:
 		_hud.show_prompt("[E] " + interactable.get_meta("puzzle_label", "Crossword"))
 	elif interactable.has_meta("shop_id"):
 		_hud.show_prompt("[E] " + interactable.get_meta("shop_label", "Shop"))
+	elif interactable.has_meta("sleep_action"):
+		_hud.show_prompt("[E] " + interactable.get_meta("sleep_label", "Sleep — advance to next day"))
 	else:
 		_hud.hide_prompt()
 
 
 func _on_interaction_triggered(interactable: Node) -> void:
-	if interactable == null:
+	if interactable == null or _sleeping:
 		return
 	if interactable.has_meta("puzzle_id"):
 		_open_puzzle(interactable)
 	elif interactable.has_meta("shop_id"):
 		_open_shop(interactable)
+	elif interactable.has_meta("sleep_action"):
+		_start_sleep()
 
 
 func _open_puzzle(interactable: Node) -> void:
@@ -75,6 +87,27 @@ func _open_shop(interactable: Node) -> void:
 	_hud.hide_prompt()
 
 
+func _start_sleep() -> void:
+	# Pause the player and fade to black. The fade_to_black_done signal
+	# (fired at mid-fade) advances the day; the second half of the fade
+	# reveals the new day's mall.
+	_sleeping = true
+	_player.set_paused_for_ui(true)
+	_hud.hide_prompt()
+	_hud.fade_to_black_and_back()
+
+
+func _on_fade_to_black_done() -> void:
+	if not _sleeping:
+		return
+	_profile.advance_day()
+	ProfileStore.save_to_path(_profile)
+	_refresh_hud()
+	# The fade-back will play; finish sleeping when it returns (next tick is fine).
+	_sleeping = false
+	_player.set_paused_for_ui(false)
+
+
 func _on_crossword_closed() -> void:
 	if _current_puzzle_id != "":
 		var live_state: CrosswordState = _crossword_ui.get_current_state()
@@ -99,6 +132,7 @@ func _on_puzzle_solved() -> void:
 		return
 	if not _profile.mark_puzzle_solved(_current_puzzle_id):
 		return  # already solved before this session — no double award
-	_profile.add_woints(_current_reward)
-	_hud.update_woints(_profile.woints)
+	var bonus: int = WointsConfig.streak_bonus(_profile.streak)
+	_profile.add_woints(_current_reward + bonus)
 	ProfileStore.save_to_path(_profile)
+	_refresh_hud()
