@@ -42,11 +42,20 @@ func _init() -> void:
 		quit(2)
 		return
 
-	print("Generating %s (%dx%d) with %d words in the dictionary..." % [
-		pattern_name, block_grid.size, block_grid.size, wordlist.total_words()
+	# Larger grids need a larger backtrack budget — 63-slot 15x15 puzzles
+	# can easily exceed the 50k default. Scale by pattern.
+	var budget: int = PuzzleGenerator.DEFAULT_BACKTRACK_BUDGET
+	match pattern_name.to_lower():
+		"full":
+			budget = 500000
+		"midi":
+			budget = 100000
+
+	print("Generating %s (%dx%d) with %d words in the dictionary (budget %d)..." % [
+		pattern_name, block_grid.size, block_grid.size, wordlist.total_words(), budget
 	])
 
-	var filled: CrosswordGrid = PuzzleGenerator.fill(block_grid, wordlist, seed_value)
+	var filled: CrosswordGrid = PuzzleGenerator.fill(block_grid, wordlist, seed_value, budget)
 	if filled == null:
 		printerr("Could not generate a valid puzzle within the backtrack budget.")
 		printerr("Try a different seed, a simpler pattern, or expanding the wordlist.")
@@ -109,21 +118,23 @@ static func _pattern_for(name: String) -> CrosswordGrid:
 				"....#....",
 			])
 		"full":
-			# 15x15 with a heavy block density — many 3-5 letter words,
-			# a few 7-letter spines. Tractable for a small wordlist.
+			# 15x15. Symmetric (180° rotational) heavy-block pattern. Each
+			# row outside the horizontal divider has two 4-letter slots and
+			# one 5-letter slot; columns get a mix of 3-7 letter slots.
+			# Verified symmetric: every cell maps to its mirror (14-r, 14-c).
 			return CrosswordGrid.from_strings([
 				"....#.....#....",
 				"....#.....#....",
 				"....#.....#....",
-				"####.#####.####",
-				".........#.....",
-				".....#####.....",
-				".....#.........",
-				"###.......###.#",
-				".........#.....",
-				".....#####.....",
-				".....#.........",
-				"####.#####.####",
+				"....#.....#....",
+				"###############",
+				"....#.....#....",
+				"....#.....#....",
+				"....#.....#....",
+				"....#.....#....",
+				"....#.....#....",
+				"###############",
+				"....#.....#....",
 				"....#.....#....",
 				"....#.....#....",
 				"....#.....#....",

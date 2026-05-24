@@ -4,6 +4,47 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-05-24 — Phase 10.4: Real 15x15 FULL puzzle
+
+### Changed
+- **`data/puzzles/mall_full_day_one.json` upgraded from 5x5 → 15x15.** Generated via `tools/puzzle_generate.gd -- full ... 1` against the new symmetric heavy-block pattern, then clue-authored by hand. The 15x15 has **78 slots: 39 across + 39 down**. Three horizontal bands separated by full-row block divides, each band containing three vertical pillars (4 + 5 + 4 letter slots per row). All 15 across rows and 13 of 15 columns are real English vocabulary.
+- Theme metadata updated to `"Full-difficulty opening puzzle — 15x15"`.
+
+### Added
+- **CLI budget scaling** in `tools/puzzle_generate.gd`. The default 50 000-step backtrack budget is enough for 5x5 mini puzzles but fails on sparse 15x15 grids — bumped to **100 000 for MIDI** and **500 000 for FULL** so the solver has room to escape dead branches. MINI still uses the default.
+- **Symmetric FULL block pattern.** The previous `full` pattern in `_pattern_for` was asymmetric (left over from a 5x5 prototype). Rewrote it as three 4-row bands (rows 0–3, 5–9, 11–14) split by full-row dividers (rows 4 and 10), each band cut by block columns at 4 and 10. 180° rotational symmetry verified by validator.
+
+### Why it matters
+This is the big one. The FULL tier is now a true Saturday-NYT-shaped puzzle: 15x15, dense, 78 slots, 15-letter rows broken into 4-5-4 columns. Players who clear MINI + MIDI on opening day can now reach for the real challenge — and the **180 Woints + 5-day streak bonus** payout finally lines up with the difficulty.
+
+### Architecture
+- **Same generator-then-hand-author workflow** as Phases 10.2 and 10.3. The 5,137-word bundled list filled the 15x15 grid with seed 1 in ~30 seconds at the new 500k budget. Author then wrote 78 clue strings; validator confirmed structural correctness.
+- **Same `puzzle_id`** (`mall_full_day_one`) — keeps existing profile state working. Players who solved the 5x5 FULL placeholder see the new 15x15 as "already solved." Net-positive (they earned the Woints once already) and avoids profile migration.
+- **Pillar grid layout.** Three bands × three pillars = nine 4x4 / 5x5 sub-blocks plus 2 horizontal dividers. Down clues span only within their band (4 or 5 cells), which is a forgiving structure for a curated 5 100-word list — bigger spanning downs would force vocab the bundled list can't cover yet.
+- **Hand-curated answers.** Every word was checked against the bundled wordlist + a sanity pass. Highlights: spine anchors **ADVOCATES** (MIDI carry-over flavor), **OVERT**, **VERGE**, **DOZEN**, **ESTER**, **ENEMY**; vertical fill includes **SLAT**, **HAIR**, **UNDO**, **TEST**, **WILD**, **IDEA**, **NEAT**, **GAVE**, **SLED**, **SPOT**, **LIME**, **OPEN**, **BENT**.
+
+### UX details
+- 15 cells per side requires the bigger crossword UI panel; `CrosswordGridView` scales transparently. Cell pixel size is constant; the panel grows to ~600 px wide.
+- All FULL-tier interactions (Tab to toggle direction, arrows, autoskip over block cells, pencil mode on backtick, check letter on slash) work identically — the input layer is geometry-agnostic.
+- Solve banner triggers at all-78 correct, Continue returns to mall.
+
+### Tests
+- The existing `test_puzzle_schedule.gd::test_every_scheduled_id_across_all_difficulties_loads` meta-test now loads the new 15x15 file and verifies `grid.size > 0`. No code changes needed.
+- `tools/puzzle_validate.gd` reports `OK` on the new puzzle.
+
+### Pre-push checklist (Phase 10.4)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 9 puzzle files (7 MINI + 1 MIDI + 1 FULL).
+- [x] GUT: 320/320 tests passing, exit 0 (no test changes — content + CLI tweak only).
+
+### Known limitations
+- **FULL schedule still has only day 1.** Days 2+ show "more FULL in a future update."
+- **Generator budget tuning is per-pattern, not adaptive.** A pathological 15x15 with extreme constraint density might still need a manual seed sweep. Future enhancement: dynamic budget scaling based on slot count.
+- **Wordlist density is uneven at length 6+.** Most 15x15 generations land on 4-5-letter slots because that's where the wordlist is dense. Bigger spanning words (7+) would require curating ~2× more vocabulary.
+
+[0.10.4]: https://github.com/NickSanft/MallCross/releases/tag/v0.10.4
+
 ## [0.10.3] - 2026-05-24 — Phase 10.3: Real 9x9 MIDI puzzle
 
 ### Changed
