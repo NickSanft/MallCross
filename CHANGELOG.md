@@ -4,6 +4,66 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-05-24 — Phase 10.2: Constraint-solver puzzle generator
+
+### Added
+- **`data/wordlists/common_words.json`** — curated English wordlist organized by length. ~5,100 words spanning 3 to 15 letters. Heavy at 3-5 (where most slots in our patterns land); sparser at 11+. All entries are uppercase ASCII A-Z.
+- **`scripts/Wordlist.gd`** — JSON loader with:
+  - `words_of_length(n)` — length-indexed array access (the hot path for slot candidate enumeration).
+  - `matches_pattern(p)` — filters by pattern like `"S.A.E"` (`.` = unknown).
+  - `contains(word)` — O(1) word-membership check via a parallel set built at load time.
+  - Defensive parsing: missing file / malformed JSON / wrong-length entries / non-alpha entries all get silently dropped.
+- **`scripts/PuzzleGenerator.gd`** — backtracking constraint solver:
+  - `PuzzleGenerator.fill(block_grid, wordlist, seed = 0, budget = 50000)` returns a filled `CrosswordGrid` or `null` if no fill exists within the backtrack budget.
+  - **MRV** (most-constrained variable first) — picks the slot with the fewest candidate words each step. Fails fast on dead branches.
+  - **Cross-slot validation** — every fully-filled slot is verified against `Wordlist.contains` each recursion. Catches the "row fills determine columns but columns aren't real words" pitfall.
+  - **No-duplicate-word rule** — a fill that would repeat a word elsewhere in the grid is rejected.
+  - **Deterministic with a seed** — internal Fisher-Yates shuffle uses the supplied `RandomNumberGenerator` instead of `Array.shuffle()` (which uses Godot's global RNG and ignores per-instance seeds).
+- **`tools/puzzle_generate.gd`** — CLI front-end. Usage:
+  ```
+  godot --headless -s res://tools/puzzle_generate.gd -- <mini|midi|full> <output.json> [seed]
+  ```
+  Loads the bundled wordlist, picks a block pattern (5x5 / 9x9 / 15x15), fills it, writes a `CrosswordSerializer.puzzle_to_dict` JSON with placeholder clue text (`"TODO: <answer>"`). Author fills in real clues before shipping.
+- **23 new GUT tests** across two files:
+  - `tests/test_wordlist.gd` (12 tests) — bundled wordlist load shape, length filtering, pattern matching with wildcards, defensive parsing, all-uppercase invariant, total count.
+  - `tests/test_puzzle_generator.gd` (11 tests) — 3x3 fill against the bundled list, every answer comes from the wordlist, null on impossible patterns, null inputs, block preservation, deterministic with seed, fills the mini pattern, validator passes the generated puzzle, no duplicate words.
+- Total project test count: **320/320 across 23 scripts** (2,955 assertions — the wordlist meta-tests bulk this up significantly).
+
+### Why it matters
+Phase 10.3 (real 9x9) and Phase 10.4 (real 15x15) can now generate quality fills from a real wordlist instead of being blocked on hand-authoring. The CLI tool produces a JSON the author can drop into `data/puzzles/` after writing clue text.
+
+### Architecture
+- **Generator is wordlist-agnostic.** Pass in any `Wordlist` instance. Phase 10.3+ could swap in a themed mini-wordlist for a specific puzzle.
+- **`Wordlist._word_set`** is a Dictionary used as a hash-set for O(1) membership. Worth the small load-time cost to avoid O(n) linear scans on the hot path inside `_solve`.
+- **Validation happens inside the recursion**, not just at the leaf. Cross-slot constraints fail fast — usually in <100 backtracks for a 5x5, scaling roughly with grid size + density.
+- **No external dependencies** — wordlist is a single JSON file, generator is one GDScript file, CLI is one more. Drop-in for anyone who wants to ship MallCross-style puzzles with different content.
+- **Same `_make_box` pattern as MallGreybox** — generator is split into `_solve` (algorithm), `_slot_pattern` / `_snapshot_slot` / `_write_word` / `_restore_slot` (grid mutation helpers), and `_shuffle_with_rng` (deterministic randomization). Easy to extend with arc consistency or a domain store in a future pass.
+
+### UX details
+- CLI output reports the dictionary size: `"Generating mini (5x5) with 5137 words in the dictionary..."`. If the wordlist failed to load you'd see `0` and a clear error instead.
+- On failure: `"Could not generate a valid puzzle within the backtrack budget. Try a different seed, a simpler pattern, or expanding the wordlist."` — actionable.
+- Generated puzzle's clue text uses the `TODO:` prefix so an author searching the file can find every clue that still needs writing.
+
+### Tests
+- 23 new GUT tests covering load/lookup, pattern matching, full happy-path generation, all the dead-end branches (null inputs, empty wordlist, impossible block pattern), determinism, block preservation, validator round-trip, no-duplicate-word rule.
+
+### Pre-push checklist (Phase 10.2)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] CLI test: `puzzle_generate.gd -- mini /tmp/test_mini.json 42` → wrote a valid puzzle file.
+- [x] GUT: 320/320 tests passing across 23 scripts (2,955 asserts), exit 0.
+
+### Known limitations
+- **Wordlist quality is starter-grade.** Common words only; few proper nouns or jargon. Longer-length buckets (11+) are sparse, so fills tend toward shorter words.
+- **No theme constraint.** Generator doesn't know what's "interesting" — it picks whatever satisfies constraints. Real crossword authors hand-pick anchor entries first.
+- **Block patterns are hardcoded in the CLI**. Three presets (mini/midi/full); no parameterization yet.
+- **Backtrack budget is fixed at 50,000**. Most fills finish well under that, but very tight patterns or sparse wordlists could hit it. CLI exit code 1 signals "try a different seed or simpler pattern."
+- **No clue generation.** Author still writes clue text by hand. Auto-cluing is well outside this phase.
+- **Tested for solvability, not aesthetics.** A generated puzzle could have words like "EBB" / "EWE" / "URN" in a row — valid but boring. A future "puzzle quality scorer" could prefer fills with more interesting vocabulary.
+
+[0.10.2]: https://github.com/NickSanft/MallCross/releases/tag/v0.10.2
+
 ## [0.10.1] - 2026-05-22 — Phase 10.1: MIDI + FULL puzzle tables (still 5x5 content)
 
 ### Added
@@ -937,5 +997,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.10.2...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1
