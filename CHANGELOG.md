@@ -4,6 +4,43 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-05-24 — Phase 10.3: Real 9x9 MIDI puzzle
+
+### Changed
+- **`data/puzzles/mall_midi_day_one.json` upgraded from 5x5 → 9x9.** Generated via `tools/puzzle_generate.gd -- midi ... 7`, then clue-authored by hand. The 9x9 has 30 slots: 13 across + 17 down. Anchored by the 9-letter spine **ADVOCATES** running through the middle row, with **ACT** running vertically through the center. Surrounding it: USER / ICED / RELY / TARO / NAME / SNAG up top, OPAL / GAME / AUTO / OPEN / KNEW / TEND below, plus 16 three-letter downs flanking each side.
+- Theme metadata updated to `"Mid-difficulty opening puzzle — 9x9"`.
+
+### Why it matters
+The MIDI tier is now a meaningfully different experience from MINI — 4× the cells, 6× the slots, two whole new vocabularies of 3- and 4-letter crossings. Solving MIDI Day 1 still pays the same 120 Woints + streak bonus; just feels earned now.
+
+### Architecture
+- **Generator → hand-author → ship.** Exactly the workflow Phase 10.2 set up: 5,100-word bundled list filled the grid in seconds; the human edits 30 clue strings; the validator catches any structural mistake on push.
+- **Same `puzzle_id`** (`mall_midi_day_one`) — keeps existing profile state working. Players who solved the 5x5 see the new 9x9 as "already solved" because the ID didn't change. Mild net-positive (they earned the Woints once already) and avoids profile migration headaches.
+- **Symmetric block pattern** — blocks at columns 4 on rows 0–2, 6–8 + center cross at row 3/5 col 4 + middle row clear. 180° rotational symmetry verified by validator.
+
+### UX details
+- 9 cells per side requires a bigger crossword UI panel; the existing `CrosswordGridView` scales to any N×N transparently (cell pixel size is constant; panel grows).
+- Cursor navigation works identically — Tab to toggle direction, arrows to move through letter cells, autoskip over the 12 block cells.
+- Coffee's check-letter highlight works on 9x9 the same way it did on 5x5 — flashes only the wrong cells in the current word.
+
+### Tests
+- The existing `test_puzzle_schedule.gd::test_every_scheduled_id_across_all_difficulties_loads` meta-test loaded the new 9x9 file and verified `grid.size > 0`. No code changes needed.
+- `tools/puzzle_validate.gd` reports `OK` on the new puzzle.
+
+### Pre-push checklist (Phase 10.3)
+- [x] `godot --headless --import` clean.
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on the new 9x9.
+- [x] GUT: 320/320 tests passing, exit 0 (no test changes — content-only update).
+
+### Known limitations
+- **MIDI schedule still has only day 1.** Days 2+ show "more MIDI in a future update."
+- **FULL is still 5x5.** Phase 10.4 will tackle the 15x15. Generator's `full` block pattern has a symmetry bug + the 50k backtrack budget isn't enough for sparse 7+ letter coverage — both will be addressed there.
+- **All MIDI down clues are 3 letters.** A more sophisticated block pattern would mix in some 5- and 6-letter downs.
+
+[0.10.3]: https://github.com/NickSanft/MallCross/releases/tag/v0.10.3
+
 ## [0.10.2] - 2026-05-24 — Phase 10.2: Constraint-solver puzzle generator
 
 ### Added
@@ -997,5 +1034,5 @@ No UI yet.
 - No crossword logic (Phase 3).
 - Default Godot icon is a placeholder — real cover art comes in Phase 8.
 
-[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/NickSanft/MallCross/compare/v0.10.3...HEAD
 [0.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v0.0.1
