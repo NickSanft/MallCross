@@ -4,6 +4,49 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-24 — Phase 11: First public release
+
+The big one. Everything below is the **v1.0.0 baseline** — playable end-to-end, real puzzles at all three tiers, public binaries.
+
+### Added
+- **MIT License.** `LICENSE` at repo root, `"Copyright (c) 2026 Nick Sanft"`. Permissive, lets anyone fork or learn from the source; only obligation is preserving the copyright notice.
+- **Release build pipeline.** `.github/workflows/release.yml` matrix-builds Linux x86_64 and Windows x86_64 binaries on every `v*` tag push and attaches them to a GitHub Release. Both binaries embed the .pck for single-file distribution.
+  - Linux: `MallCross.x86_64` (~70 MB ELF).
+  - Windows: `MallCross.exe` (~100 MB PE32+).
+  - One Ubuntu runner cross-compiles both targets via Godot's export templates (cached across runs).
+  - `workflow_dispatch` trigger lets the pipeline run on `main` without cutting a release — used for testing the export step before tagging.
+- **`export_presets.cfg` tracked as source.** Hand-authored, two presets (`Linux/X11`, `Windows Desktop`). Previously git-ignored because it was thought of as an editor artifact; v1.0.0 treats it as part of the build contract.
+  - `application/modify_resources=false` on Windows so the Linux runner doesn't need wine + rcedit + osslsigncode to embed Windows resources. Tradeoff: generic icon, no version info embedded. Worth it for build simplicity at this stage.
+- **README overhaul.** Real status (no longer "Phase 0"), CI + Release badges, MIT badge, download instructions for pre-built binaries, gameplay loop, complete controls (including the in-crossword bindings), generator/validator CLI quick-reference, phase-by-phase roadmap link.
+
+### Changed
+- **`.gitignore`** un-ignores `export_presets.cfg`. Inline comment explains why (it's the release build contract now).
+
+### Why it matters
+v1.0.0 is the first version a stranger could download and play without cloning the repo and installing Godot. The build pipeline removes the human from the binary-shipping path: tag → CI builds Linux + Windows → release goes live with both attached. From here on, every tagged release ships binaries automatically.
+
+### Architecture
+- **Workflow split.** `ci.yml` (parse + smoke + validator + GUT) still runs on every push and PR. `release.yml` only fires on tag push or manual dispatch, so we don't burn export-template downloads on every commit.
+- **Cached export templates.** First release run downloads ~700 MB of Godot binaries + templates; subsequent runs hit the cache and complete the matrix in ~90 s wall time.
+- **Single-binary distribution.** `binary_format/embed_pck=true` on both presets means players get one file per platform, no separate `.pck` to bundle.
+- **`if: startsWith(github.ref, 'refs/tags/')`** on the Create-Release job is the safety latch: workflow_dispatch builds artifacts (for testing) but never creates a release. Only a `v*` tag push does that.
+
+### Pre-push checklist (Phase 11 / v1.0.0)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 9 puzzle files.
+- [x] GUT: 320/320 tests passing, exit 0.
+- [x] CI green on `main` for the scaffolding commit.
+- [x] `workflow_dispatch` dry-run of `release.yml` produced valid Linux + Windows zip artifacts (verified by `unzip -l`).
+
+### Known limitations / future work
+- **macOS and HTML5 not yet shipped.** Adding them is a matter of two more entries in the export matrix once we're ready to absorb codesign/notarization (macOS) or browser audio quirks (HTML5).
+- **No auto-update or in-game version display.** Players check the Releases page manually.
+- **MIDI and FULL schedules still only have day 1.** Days 2+ show "more puzzles in a future update." The infrastructure (PuzzleSchedule + per-tier hint roster + generator + validator) is all in place; just needs more authored content.
+- **Windows binary is unsigned.** Smart Screen will warn on first run. Code signing is a 1.x consideration.
+
+[1.0.0]: https://github.com/NickSanft/MallCross/releases/tag/v1.0.0
+
 ## [0.10.4] - 2026-05-24 — Phase 10.4: Real 15x15 FULL puzzle
 
 ### Changed
