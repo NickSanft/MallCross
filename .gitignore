@@ -10,10 +10,12 @@
 data_*/
 mono_crash.*.json
 
-# Build / export artifacts (we may track export_presets.cfg later)
+# Build / export artifacts.
+# export_presets.cfg IS tracked — release CI needs it to build Linux/Windows
+# binaries headlessly. Treat it as source. Don't commit per-developer secrets
+# (signing identities, ssh deploy hosts) inside it.
 build/
 export.cfg
-export_presets.cfg
 
 # OS
 .DS_Store

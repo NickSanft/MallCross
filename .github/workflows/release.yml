@@ -1,0 +1,141 @@
+name: Release
+
+# Builds Linux + Windows binaries via headless Godot export. Triggers on
+# any tag push matching `v*` (which creates a GitHub Release with the
+# binaries attached) and on `workflow_dispatch` (build-only — no release
+# is created — for testing the export pipeline before cutting a tag).
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.6.1
+  GODOT_STATUS: stable
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: "Linux/X11"
+            output: "MallCross.x86_64"
+            label: "linux-x86_64"
+          - preset: "Windows Desktop"
+            output: "MallCross.exe"
+            label: "windows-x86_64"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Godot + export templates
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot-bin
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_STATUS }}-linux-x86_64-with-templates-v1
+
+      - name: Download Godot + export templates
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/godot-bin
+          curl -fsSL -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_STATUS}/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64.zip"
+          unzip -o /tmp/godot.zip -d /tmp/godot-extracted
+          mv /tmp/godot-extracted/Godot_v*_linux.x86_64 ~/godot-bin/godot
+          chmod +x ~/godot-bin/godot
+
+          # Export templates are bundled in a .tpz (which is a renamed zip).
+          # Godot looks for them in ~/.local/share/godot/export_templates/<VERSION>.<STATUS>/
+          curl -fsSL -o /tmp/templates.tpz \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_STATUS}/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_export_templates.tpz"
+          mkdir -p ~/.local/share/godot/export_templates
+          unzip -o /tmp/templates.tpz -d /tmp/templates-extracted
+          mv /tmp/templates-extracted/templates "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}"
+
+      - name: Add Godot to PATH
+        run: echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+
+      - name: Godot version
+        run: godot --version
+
+      - name: Import project
+        run: |
+          # First headless run generates .godot/ + imports all resources.
+          # Godot sometimes exits non-zero after a clean import on CI, so
+          # we tolerate failure here and rely on the next step's parse check.
+          godot --headless --import || true
+
+      - name: Parse check
+        run: godot --headless --quit
+
+      - name: Export ${{ matrix.preset }}
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          godot --headless --export-release "${{ matrix.preset }}" "build/${{ matrix.output }}"
+          ls -la build/
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          cd build
+          zip -r "../MallCross-${{ matrix.label }}.zip" .
+          cd ..
+          ls -la MallCross-${{ matrix.label }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MallCross-${{ matrix.label }}
+          path: MallCross-${{ matrix.label }}.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only create a release when triggered by a tag push. workflow_dispatch
+    # runs upload artifacts but do not cut a release.
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: |
+          set -euo pipefail
+          ls -la artifacts/
+          find artifacts -type f -name '*.zip'
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF##*/}"
+          gh release create "$TAG" \
+            --title "MallCross $TAG" \
+            --generate-notes \
+            artifacts/*/*.zip
