@@ -362,3 +362,103 @@ func test_from_dict_clamps_negative_streak() -> void:
 func test_from_dict_clamps_negative_last_solved_day() -> void:
 	var restored: Profile = Profile.from_dict({"last_solved_day": -3})
 	assert_eq(restored.last_solved_day, 0)
+
+
+# ----- best_times (introduced in FORMAT_VERSION 2) -----------------------
+
+func test_record_solve_time_first_time_returns_true() -> void:
+	var profile: Profile = Profile.new()
+	assert_true(profile.record_solve_time("p", 5000))
+	assert_eq(profile.best_time_ms("p"), 5000)
+
+
+func test_record_solve_time_improves_on_better_time() -> void:
+	var profile: Profile = Profile.new()
+	profile.record_solve_time("p", 5000)
+	assert_true(profile.record_solve_time("p", 3200))
+	assert_eq(profile.best_time_ms("p"), 3200)
+
+
+func test_record_solve_time_ignores_worse_time() -> void:
+	var profile: Profile = Profile.new()
+	profile.record_solve_time("p", 3200)
+	assert_false(profile.record_solve_time("p", 5000))
+	assert_eq(profile.best_time_ms("p"), 3200)
+
+
+func test_record_solve_time_rejects_zero_or_negative() -> void:
+	var profile: Profile = Profile.new()
+	assert_false(profile.record_solve_time("p", 0))
+	assert_false(profile.record_solve_time("p", -100))
+	assert_eq(profile.best_time_ms("p"), 0)
+
+
+func test_record_solve_time_rejects_empty_puzzle_id() -> void:
+	var profile: Profile = Profile.new()
+	assert_false(profile.record_solve_time("", 5000))
+
+
+func test_best_time_ms_returns_zero_when_never_recorded() -> void:
+	var profile: Profile = Profile.new()
+	assert_eq(profile.best_time_ms("p"), 0)
+
+
+func test_best_times_round_trip_via_dict() -> void:
+	var profile: Profile = Profile.new()
+	profile.record_solve_time("a", 4500)
+	profile.record_solve_time("b", 12000)
+	var restored: Profile = Profile.from_dict(profile.to_dict())
+	assert_eq(restored.best_time_ms("a"), 4500)
+	assert_eq(restored.best_time_ms("b"), 12000)
+
+
+func test_v1_profile_migrates_to_v2_with_empty_best_times() -> void:
+	# A v1 dict has no best_times key at all. Loading it should not crash
+	# and best_times should be an empty dict.
+	var v1_payload: Dictionary = {
+		"version": 1,
+		"woints": 100,
+		"current_day": 3,
+		"puzzles_solved": {"p": {"first_solved_day": 1}},
+	}
+	var restored: Profile = Profile.from_dict(v1_payload)
+	assert_eq(restored.best_time_ms("p"), 0)
+	assert_true(restored.is_puzzle_solved("p"))
+	assert_eq(restored.woints, 100)
+
+
+func test_from_dict_filters_malformed_best_time_entries() -> void:
+	# Strings, zero, negatives — none should survive the load.
+	var payload: Dictionary = {
+		"best_times": {
+			"good": 4000,
+			"zero": 0,
+			"neg": -500,
+			"str_value": "5000",  # int() conversion would yield 5000; allow it
+			"": 9999,             # empty puzzle id rejected
+		}
+	}
+	var restored: Profile = Profile.from_dict(payload)
+	assert_eq(restored.best_time_ms("good"), 4000)
+	assert_eq(restored.best_time_ms("zero"), 0)
+	assert_eq(restored.best_time_ms("neg"), 0)
+	# int("5000") in GDScript == 5000, so this one DOES survive — documents
+	# the lenient behavior. If we tighten that later, flip this assertion.
+	assert_eq(restored.best_time_ms("str_value"), 5000)
+	assert_eq(restored.best_time_ms(""), 0)
+
+
+func test_format_time_ms_renders_minutes_seconds() -> void:
+	assert_eq(Profile.format_time_ms(0), "--:--")
+	assert_eq(Profile.format_time_ms(-1), "--:--")
+	assert_eq(Profile.format_time_ms(1000), "0:01")
+	assert_eq(Profile.format_time_ms(65 * 1000), "1:05")
+	assert_eq(Profile.format_time_ms(257 * 1000), "4:17")
+	# > 1 hour falls back to H:MM:SS so the 8-hour-solver doesn't see "120:00"
+	assert_eq(Profile.format_time_ms(3661 * 1000), "1:01:01")
+
+
+func test_format_version_bumped_to_v2() -> void:
+	# Guard against an accidental version-number revert that would break the
+	# v1 → v2 migration tested above.
+	assert_eq(Profile.FORMAT_VERSION, 2)

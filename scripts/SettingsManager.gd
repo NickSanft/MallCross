@@ -11,10 +11,12 @@ const DEFAULT_PATH: String = "user://settings.json"
 const KEY_MOUSE_SENSITIVITY: String = "mouse_sensitivity"
 const KEY_MASTER_VOLUME_DB: String = "master_volume_db"
 const KEY_FOOTSTEP_VOLUME_DB: String = "footstep_volume_db"
+const KEY_SKIP_TITLE: String = "skip_title"
 
 const DEFAULT_MOUSE_SENSITIVITY: float = 0.002
 const DEFAULT_MASTER_VOLUME_DB: float = 0.0
 const DEFAULT_FOOTSTEP_VOLUME_DB: float = -8.0
+const DEFAULT_SKIP_TITLE: bool = false
 
 const MIN_MOUSE_SENSITIVITY: float = 0.0005
 const MAX_MOUSE_SENSITIVITY: float = 0.01
@@ -29,6 +31,7 @@ static func default_settings() -> Dictionary:
 		KEY_MOUSE_SENSITIVITY: DEFAULT_MOUSE_SENSITIVITY,
 		KEY_MASTER_VOLUME_DB: DEFAULT_MASTER_VOLUME_DB,
 		KEY_FOOTSTEP_VOLUME_DB: DEFAULT_FOOTSTEP_VOLUME_DB,
+		KEY_SKIP_TITLE: DEFAULT_SKIP_TITLE,
 	}
 
 
@@ -76,9 +79,14 @@ static func normalize(settings: Dictionary) -> Dictionary:
 
 static func _normalize(loaded: Dictionary) -> Dictionary:
 	var out: Dictionary = default_settings()
-	for key in out.keys():
+	# Numeric keys come through float(); boolean keys take the raw value so a
+	# stored `true` / `false` survives the round-trip without being coerced
+	# to 1.0 / 0.0.
+	for key in [KEY_MOUSE_SENSITIVITY, KEY_MASTER_VOLUME_DB, KEY_FOOTSTEP_VOLUME_DB]:
 		if loaded.has(key):
 			out[key] = float(loaded[key])
+	if loaded.has(KEY_SKIP_TITLE):
+		out[KEY_SKIP_TITLE] = bool(loaded[KEY_SKIP_TITLE])
 	out[KEY_MOUSE_SENSITIVITY] = clampf(out[KEY_MOUSE_SENSITIVITY], MIN_MOUSE_SENSITIVITY, MAX_MOUSE_SENSITIVITY)
 	out[KEY_MASTER_VOLUME_DB] = clampf(out[KEY_MASTER_VOLUME_DB], MIN_MASTER_VOLUME_DB, MAX_MASTER_VOLUME_DB)
 	out[KEY_FOOTSTEP_VOLUME_DB] = clampf(out[KEY_FOOTSTEP_VOLUME_DB], MIN_FOOTSTEP_VOLUME_DB, MAX_FOOTSTEP_VOLUME_DB)

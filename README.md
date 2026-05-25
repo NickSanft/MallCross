@@ -42,6 +42,7 @@ No installer, no dependencies — Godot's runtime is statically linked and all g
 | Tab | Toggle across/down |
 | Backtick (\`) | Pencil mode |
 | Slash (/) | Check letter (if you've bought the perk) |
+| ? or F1 | Show / hide hotkey overlay |
 
 ## Tech
 

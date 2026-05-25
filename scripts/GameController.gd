@@ -32,6 +32,9 @@ func _ready() -> void:
 	_player.interactable_changed.connect(_on_interactable_changed)
 	_player.interaction_triggered.connect(_on_interaction_triggered)
 	_crossword_ui.closed.connect(_on_crossword_closed)
+	# puzzle_solved now carries the in-puzzle elapsed time in ms so we can
+	# record per-puzzle bests. Older binding (no arg) would still receive
+	# the call but the elapsed_ms wouldn't be used.
 	_crossword_ui.puzzle_solved.connect(_on_puzzle_solved)
 	_shop_ui.closed.connect(_on_shop_closed)
 	_hud.fade_to_black_done.connect(_on_fade_to_black_done)
@@ -133,9 +136,20 @@ func _show_daily_puzzle_prompt() -> void:
 		else:
 			_hud.show_prompt("No %s puzzle today — sleep to advance the day" % label)
 	elif _profile.is_puzzle_solved(puzzle_id):
-		_hud.show_prompt("[E] %s Day %d (already solved)" % [label, day])
+		_hud.show_prompt("[E] %s Day %d (already solved%s)" % [label, day, _best_time_suffix(puzzle_id)])
 	else:
-		_hud.show_prompt("[E] Solve %s Day %d" % [label, day])
+		_hud.show_prompt("[E] Solve %s Day %d%s" % [label, day, _best_time_suffix(puzzle_id)])
+
+
+func _best_time_suffix(puzzle_id: String) -> String:
+	# Appended onto solve / already-solved prompts as e.g. " · best 4:17".
+	# Returns "" when the puzzle has never been timed (existing v0.x save
+	# files solve old puzzles without ever populating best_times — those
+	# stay clean rather than displaying a "--:--" suffix).
+	var ms: int = _profile.best_time_ms(puzzle_id)
+	if ms <= 0:
+		return ""
+	return " · best %s" % Profile.format_time_ms(ms)
 
 
 func _player_current_interactable() -> Node:
@@ -184,7 +198,11 @@ func _open_puzzle(interactable: Node, puzzle_id: String) -> void:
 	_current_puzzle_id = puzzle_id
 	_current_reward = reward_remaining
 	var cached_state: CrosswordState = _profile.get_cached_state(puzzle_id)
-	_crossword_ui.open_puzzle(puzzle, cached_state, reward_remaining, _profile.is_puzzle_solved(puzzle_id), _profile)
+	# Pass puzzle_id and any prior partial-solve elapsed time. v1.0.1 doesn't
+	# persist mid-solve elapsed_ms across game launches yet — that lives in
+	# CrosswordUI's local var until the modal closes — so resume from 0 here.
+	# A future patch can extend CrosswordState serialization to include it.
+	_crossword_ui.open_puzzle(puzzle, cached_state, reward_remaining, _profile.is_puzzle_solved(puzzle_id), _profile, puzzle_id, 0)
 	_player.set_paused_for_ui(true)
 	_hud.hide_prompt()
 
@@ -246,11 +264,16 @@ func _on_shop_closed() -> void:
 	_player.refresh_interaction_target()
 
 
-func _on_puzzle_solved() -> void:
+func _on_puzzle_solved(elapsed_ms: int) -> void:
 	if _current_puzzle_id == "":
 		return
+	# Record the time first — applies whether or not this is the first solve,
+	# so a re-solve that improves the record still counts. Profile.record_solve_time
+	# handles the "only if better than previous" check internally.
+	_profile.record_solve_time(_current_puzzle_id, elapsed_ms)
 	if not _profile.mark_puzzle_solved(_current_puzzle_id):
-		return  # already solved before this session — no double award
+		ProfileStore.save_to_path(_profile)  # persist the (possibly new) best time
+		return  # already solved before this session — no double Woints
 	var bonus: int = WointsConfig.streak_bonus(_profile.streak)
 	_profile.add_woints(_current_reward + bonus)
 	ProfileStore.save_to_path(_profile)

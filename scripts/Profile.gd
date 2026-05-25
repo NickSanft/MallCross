@@ -7,7 +7,7 @@ extends RefCounted
 #
 # Pure model — no disk I/O. ProfileStore handles serialization.
 
-const FORMAT_VERSION: int = 1
+const FORMAT_VERSION: int = 2  # v1.0.1: introduced best_times. Loader migrates v1 forward.
 const DEFAULT_WOINTS: int = 0
 const DEFAULT_DAY: int = 1
 
@@ -24,6 +24,10 @@ var owned_items: Array = []
 var streak: int = 0
 # Day on which the most recent first-solve happened. 0 = never solved.
 var last_solved_day: int = 0
+# puzzle_id -> best solve time in milliseconds (the lowest seen so far).
+# Introduced in FORMAT_VERSION 2; absent / non-int values are filtered out
+# during load_from_dict so old v1 profiles migrate forward as an empty dict.
+var best_times: Dictionary = {}
 
 # puzzle_id -> CrosswordState (in-memory). Serialized via CrosswordSerializer
 # at to_dict() time so we keep one source of truth for the on-disk shape.
@@ -88,6 +92,43 @@ func advance_day(amount: int = 1) -> void:
 	current_day = max(1, current_day + amount)
 
 
+func record_solve_time(puzzle_id: String, elapsed_ms: int) -> bool:
+	# Records `elapsed_ms` as the player's best time for this puzzle iff it
+	# beats the existing best (or is the first time). Returns true if a new
+	# best was recorded — callers can use that to trigger a "new record"
+	# achievement or VFX later.
+	#
+	# Negative / zero times are ignored (can't physically solve in 0ms; also
+	# guards against a bug elsewhere that submits a stale timer).
+	if puzzle_id == "" or elapsed_ms <= 0:
+		return false
+	var prev: int = int(best_times.get(puzzle_id, 0))
+	if prev != 0 and prev <= elapsed_ms:
+		return false
+	best_times[puzzle_id] = elapsed_ms
+	return true
+
+
+func best_time_ms(puzzle_id: String) -> int:
+	# Returns 0 if no time has ever been recorded for this puzzle.
+	return int(best_times.get(puzzle_id, 0))
+
+
+static func format_time_ms(ms: int) -> String:
+	# Render an elapsed-ms duration as "M:SS" (or "H:MM:SS" for the
+	# pathological case of a multi-hour solve). Used by both the prompt
+	# string ("(best 4:17)") and the solve banner.
+	if ms <= 0:
+		return "--:--"
+	var total_seconds: int = int(ms / 1000)
+	var hours: int = total_seconds / 3600
+	var minutes: int = (total_seconds % 3600) / 60
+	var seconds: int = total_seconds % 60
+	if hours > 0:
+		return "%d:%02d:%02d" % [hours, minutes, seconds]
+	return "%d:%02d" % [minutes, seconds]
+
+
 func own_item(item_id: String) -> bool:
 	# Returns true on first acquisition (callers can use this to gate VFX or
 	# tutorial pop-ups); false on repeat. Does not deduct Woints — the
@@ -138,6 +179,7 @@ func to_dict() -> Dictionary:
 		"puzzles_solved": puzzles_solved.duplicate(true),
 		"owned_items": owned_items.duplicate(),
 		"puzzle_states": states_payload,
+		"best_times": best_times.duplicate(),
 	}
 
 
@@ -159,4 +201,14 @@ static func from_dict(payload: Dictionary) -> Profile:
 		if typeof(states_payload[id]) != TYPE_DICTIONARY:
 			continue
 		profile._cached_states[id] = CrosswordSerializer.state_from_dict(states_payload[id])
+	# best_times: v1 profiles don't have this key; v2+ stores puzzle_id -> ms.
+	# Filter to int values >0 so a malformed entry can't pollute the rest.
+	var raw_best: Variant = payload.get("best_times", {})
+	if raw_best is Dictionary:
+		for id in raw_best:
+			if not (id is String) or String(id) == "":
+				continue
+			var ms: int = int(raw_best[id])
+			if ms > 0:
+				profile.best_times[id] = ms
 	return profile

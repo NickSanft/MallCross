@@ -18,6 +18,7 @@ var _master_slider: HSlider
 var _master_value_label: Label
 var _footstep_slider: HSlider
 var _footstep_value_label: Label
+var _skip_title_checkbox: CheckBox
 var _confirm_dialog: ConfirmationDialog
 
 
@@ -42,6 +43,8 @@ func _sync_sliders_from_settings() -> void:
 	_mouse_slider.value = float(_settings.get(SettingsManager.KEY_MOUSE_SENSITIVITY, SettingsManager.DEFAULT_MOUSE_SENSITIVITY))
 	_master_slider.value = float(_settings.get(SettingsManager.KEY_MASTER_VOLUME_DB, SettingsManager.DEFAULT_MASTER_VOLUME_DB))
 	_footstep_slider.value = float(_settings.get(SettingsManager.KEY_FOOTSTEP_VOLUME_DB, SettingsManager.DEFAULT_FOOTSTEP_VOLUME_DB))
+	if _skip_title_checkbox != null:
+		_skip_title_checkbox.button_pressed = bool(_settings.get(SettingsManager.KEY_SKIP_TITLE, SettingsManager.DEFAULT_SKIP_TITLE))
 	_update_value_labels()
 
 
@@ -130,6 +133,20 @@ func _build_layout() -> void:
 	_footstep_value_label = _last_value_label
 	_footstep_slider.value_changed.connect(_on_footstep_volume_changed)
 
+	# Skip-title checkbox sits alongside the sliders. Default is false (show
+	# the title card every launch); flipping it on auto-advances after a
+	# very brief flash so the scene tree is still exercised on startup.
+	var skip_row: HBoxContainer = HBoxContainer.new()
+	skip_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(skip_row)
+	var skip_label: Label = Label.new()
+	skip_label.text = "Skip title screen"
+	skip_label.custom_minimum_size = Vector2(160.0, 0.0)
+	skip_row.add_child(skip_label)
+	_skip_title_checkbox = CheckBox.new()
+	_skip_title_checkbox.toggled.connect(_on_skip_title_toggled)
+	skip_row.add_child(_skip_title_checkbox)
+
 	var footer: HBoxContainer = HBoxContainer.new()
 	footer.add_theme_constant_override("separation", 12)
 	footer.alignment = BoxContainer.ALIGNMENT_END
@@ -145,6 +162,16 @@ func _build_layout() -> void:
 	close_button.text = "Close (Esc)"
 	close_button.pressed.connect(close_menu)
 	footer.add_child(close_button)
+
+	# Build-info footer: dim, right-aligned, "v1.0.1 (149a6a8)". A copy lives
+	# on the title screen too — having it here makes a player who reports a
+	# bug from the pause menu able to read off the exact build.
+	var version_label: Label = Label.new()
+	version_label.text = BuildInfo.version_string()
+	version_label.add_theme_font_size_override("font_size", 11)
+	version_label.add_theme_color_override("font_color", Color(0.45, 0.45, 0.50))
+	version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(version_label)
 
 	_confirm_dialog = ConfirmationDialog.new()
 	_confirm_dialog.dialog_text = "Reset all save data? This deletes your Woints, day, solved puzzles, and inventory. Cannot be undone."
@@ -200,6 +227,11 @@ func _on_master_volume_changed(value: float) -> void:
 func _on_footstep_volume_changed(value: float) -> void:
 	_settings[SettingsManager.KEY_FOOTSTEP_VOLUME_DB] = value
 	_update_value_labels()
+	settings_changed.emit(_settings)
+
+
+func _on_skip_title_toggled(pressed: bool) -> void:
+	_settings[SettingsManager.KEY_SKIP_TITLE] = pressed
 	settings_changed.emit(_settings)
 
 

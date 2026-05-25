@@ -12,7 +12,8 @@ config_version=5
 
 config/name="MallCross"
 config/description="First-person mall exploration with daily NYT-style crosswords. Solve to earn Woints, spend at mall stores on cosmetic and functional items."
-run/main_scene="res://scenes/Main.tscn"
+config/version="1.0.1"
+run/main_scene="res://scenes/TitleScreen.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 

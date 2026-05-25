@@ -14,6 +14,7 @@ const COLOR_BORDER: Color = Color(0.55, 0.55, 0.55)
 const COLOR_CURSOR_BG: Color = Color(0.45, 0.75, 1.0)
 const COLOR_WORD_BG: Color = Color(0.84, 0.92, 1.0)
 const COLOR_CORRECT_BG: Color = Color(0.86, 0.96, 0.86)
+const COLOR_SOLVE_SWEEP_BG: Color = Color(0.55, 0.92, 0.55)
 const COLOR_WRONG_BORDER: Color = Color(0.95, 0.20, 0.20)
 const COLOR_TEXT: Color = Color.BLACK
 const COLOR_TEXT_PENCIL: Color = Color(0.45, 0.45, 0.45)
@@ -30,6 +31,9 @@ var numbers: Array
 var show_correct_highlights: bool = false
 var _word_cell_set: Dictionary = {}
 var _wrong_cell_set: Dictionary = {}
+# Cells currently tinted by the post-solve sweep animation. Empty = no sweep
+# active. Populated by CrosswordUI in row-major order, one cell per frame-pair.
+var _solve_highlight_set: Dictionary = {}
 
 
 func render(p_grid: CrosswordGrid, p_state: CrosswordState, p_cursor: CrosswordCursor) -> void:
@@ -60,6 +64,16 @@ func set_wrong_cells(cells: Array) -> void:
 	queue_redraw()
 
 
+func set_solve_highlight_cells(cells: Array) -> void:
+	# `cells` is an Array of Dictionary {"row": int, "col": int}. CrosswordUI
+	# uses this to drive the post-solve sweep — pushes one more cell each
+	# frame, then clears with an empty array when the sweep ends.
+	_solve_highlight_set.clear()
+	for cell in cells:
+		_solve_highlight_set[_cell_key(int(cell["row"]), int(cell["col"]))] = true
+	queue_redraw()
+
+
 func _draw() -> void:
 	if grid == null:
 		return
@@ -76,7 +90,12 @@ func _draw_cell(r: int, c: int) -> void:
 		return
 
 	var bg: Color = COLOR_CELL_BG
-	if cursor != null and r == cursor.row and c == cursor.col:
+	# Solve-sweep highlight wins over cursor/word — the sweep is only live
+	# during the post-solve celebration, when the cursor is no longer
+	# meaningful anyway.
+	if _solve_highlight_set.has(_cell_key(r, c)):
+		bg = COLOR_SOLVE_SWEEP_BG
+	elif cursor != null and r == cursor.row and c == cursor.col:
 		bg = COLOR_CURSOR_BG
 	elif _word_cell_set.has(_cell_key(r, c)):
 		bg = COLOR_WORD_BG

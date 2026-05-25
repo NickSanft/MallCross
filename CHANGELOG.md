@@ -4,6 +4,46 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-24 — Phase 12: Polish bundle
+
+First post-1.0 polish patch. Five small features bundled to give the v1.0.0 binary a pulse.
+
+### Added
+- **Title screen** (`scenes/TitleScreen.tscn`). Logo card + "press any key" + version footer. Now the project's `main_scene`; `Main.tscn` still loads directly when CI passes it by path, so headless smoke-tests aren't affected. New `KEY_SKIP_TITLE` setting (default `false`) auto-advances after a 50ms flash for players who want to bypass the card on relaunch.
+- **`BuildInfo` static class.** Reads `res://data/build_info.json` lazily and caches the result. The release workflow now overwrites that file before the export step so the shipped binary embeds the real git tag, short commit hash, and UTC build timestamp. Dev workspaces show `dev (dev)`. Surfaces:
+  - bottom-right of the title screen
+  - footer of the pause/settings menu
+- **In-puzzle solve animation.** When the last correct letter goes in, the timer freezes and a green cell-by-cell highlight sweeps across the grid in row-major order (30ms per cell — ~270ms for MINI, ~6.7s for FULL). The Continue banner shows immediately on top so Enter/Space dismisses any time; the sweep only runs in the background as a celebration. Skipped on already-solved re-opens (no re-animation).
+- **In-puzzle hotkey overlay.** A `?` button in the puzzle UI header (and the global `?` / `F1` keys) toggles a translucent help card listing every binding: A-Z, Backspace, Delete, arrows, Tab/Space (toggle direction), backtick (pencil), slash (check-letter), Esc. Solves the "what was the pencil key again?" feedback from v1.0.0.
+- **Per-puzzle best time tracking.** `Profile.best_times: Dictionary[String, int]` records the lowest solve time (in ms) seen for each puzzle. The CrosswordUI now displays a live `M:SS` timer in the header that pauses when the modal closes mid-solve and resumes on re-open. After solving, the banner shows the time alongside the Woints reward, and "(new best — was 4:17)" / "(best 4:17)" / "(first solve)" annotations contextualize it. Food-court table prompts append `· best 4:17` so you can chase your own record without opening the puzzle.
+
+### Changed
+- **`Profile.FORMAT_VERSION` bumped from 1 to 2.** Adds `best_times: Dictionary`. The `from_dict` loader now migrates v1 profiles forward — missing `best_times` key initializes to an empty dict, so no existing save loses data. Malformed entries (non-int, ≤0, empty puzzle_id) are filtered.
+- **`puzzle_solved` signal now carries `elapsed_ms: int`.** GameController hooks into the new arg to call `Profile.record_solve_time` before the Woints award. The existing "no double award on re-solve" behavior preserves: a re-solve that beats the previous best updates the best time but doesn't repeat the Woints.
+- **`CrosswordUI.open_puzzle` signature extended** with optional `puzzle_id` and `elapsed_ms_resume` params. Old callers (none in tree) still work because both are tail-defaulted.
+- **`SettingsMenu` gets a Skip Title checkbox + a build-info footer.** The footer is centered, dim, and small enough to not draw the eye away from the sliders.
+- **`project.godot`:** `config/version="1.0.1"` and `run/main_scene` swapped to `scenes/TitleScreen.tscn`.
+
+### Architecture
+- **BuildInfo design.** Static `class_name`, not an autoload — cheaper, lazier, no boot-order coupling. The cache is process-wide via static vars; `_reset_for_test` / `_override_for_test` are intentionally underscored to mark them as test-only.
+- **Build-info injection in release.yml.** Runs *before* `--import` so the export bakes the real values in. A `workflow_dispatch` (no tag) falls back to the short commit hash for the version field, so dev binary downloads still show something useful. The file is committed with `"dev"` placeholders so a fresh clone parses cleanly.
+- **Timer pause/resume model.** `_elapsed_ms` holds the running total; `_resume_ticks_msec` holds the wall-clock anchor for the current run segment. `get_elapsed_ms()` is sum + (now - anchor) while running, or just sum while paused. The model survives modal-close/reopen cycles within a single launch. (Persisting mid-solve elapsed across game launches is a future enhancement — would require extending `CrosswordState` serialization.)
+- **Solve animation runs concurrently with the banner.** The sweep is an `await` coroutine on a `SceneTreeTimer`; the banner shows synchronously after the first `puzzle_solved.emit()`. If the player Esc's during the sweep, the `if not visible: return` guard inside the loop bails cleanly, no orphan timers.
+
+### Pre-push checklist (Phase 12 / v1.0.1)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0 (new step also added to CI).
+- [x] `tools/puzzle_validate.gd` `OK` on all 9 puzzle files.
+- [x] GUT: 342/342 tests passing (up from 320 — added 22 across Profile, BuildInfo, SettingsManager).
+
+### Known limitations / future work
+- **Mid-solve elapsed time isn't persisted across game launches.** If you Esc out of a half-solved puzzle, quit, relaunch, and re-enter, the timer starts from 0 (and your best won't include the prior in-launch time). A later patch can extend `CrosswordState` serialization to fix this. For now, the in-launch pause/resume works correctly.
+- **The solve animation has no audio cue.** Adding a "ding" or rising arpeggio would amplify the feel, gated by Phase 14's master/SFX volume sliders.
+- **No "new best" achievement yet** — that lands in Phase 15.
+
+[1.0.1]: https://github.com/NickSanft/MallCross/releases/tag/v1.0.1
+
 ## [1.0.0] - 2026-05-24 — Phase 11: First public release
 
 The big one. Everything below is the **v1.0.0 baseline** — playable end-to-end, real puzzles at all three tiers, public binaries.

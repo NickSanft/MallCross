@@ -71,6 +71,31 @@ jobs:
       - name: Godot version
         run: godot --version
 
+      - name: Inject build_info.json (commit + tag + timestamp)
+        # Overwritten BEFORE import/export so the actual build artifact bakes
+        # in the real values. In a freshly-cloned repo this file holds "dev"
+        # placeholders; CI flips those to the truth for the release binary.
+        # If triggered via workflow_dispatch (no tag), VERSION falls back to
+        # the short commit hash so dev builds still show something useful.
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF##*/}"
+          else
+            VERSION="${GITHUB_SHA:0:7}"
+          fi
+          COMMIT="${GITHUB_SHA:0:7}"
+          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cat > data/build_info.json <<EOF
+          {
+              "version": "${VERSION}",
+              "commit": "${COMMIT}",
+              "built_at": "${BUILT_AT}"
+          }
+          EOF
+          echo "--- build_info.json ---"
+          cat data/build_info.json
+
       - name: Import project
         run: |
           # First headless run generates .godot/ + imports all resources.

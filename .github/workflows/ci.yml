@@ -59,6 +59,13 @@ jobs:
       - name: Main scene smoke-run (60 frames headless)
         run: godot --headless --quit-after 60 res://scenes/Main.tscn
 
+      - name: Title screen smoke-run (60 frames headless)
+        # Title screen is now the project's main_scene; this exercises the
+        # BuildInfo label load + the "press any key" wait path without
+        # actually transitioning into Main.tscn (--quit-after 60 stops
+        # before the 0.5s min-visible window elapses).
+        run: godot --headless --quit-after 60 res://scenes/TitleScreen.tscn
+
       - name: Validate bundled puzzles
         run: |
           set -euo pipefail

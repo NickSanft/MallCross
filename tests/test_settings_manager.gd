@@ -122,3 +122,41 @@ func test_save_persists_clamped_values_not_raw() -> void:
 	}, path)
 	var restored: Dictionary = SettingsManager.load_from_path(path)
 	assert_eq(restored[SettingsManager.KEY_MOUSE_SENSITIVITY], SettingsManager.MAX_MOUSE_SENSITIVITY)
+
+
+# ----- skip_title (introduced in v1.0.1) -----------------------------
+
+func test_defaults_include_skip_title_false() -> void:
+	var defaults: Dictionary = SettingsManager.default_settings()
+	assert_true(defaults.has(SettingsManager.KEY_SKIP_TITLE))
+	assert_false(defaults[SettingsManager.KEY_SKIP_TITLE])
+
+
+func test_normalize_preserves_skip_title_true() -> void:
+	var normalized: Dictionary = SettingsManager.normalize({
+		SettingsManager.KEY_SKIP_TITLE: true,
+	})
+	assert_true(normalized[SettingsManager.KEY_SKIP_TITLE])
+
+
+func test_skip_title_round_trips_via_disk() -> void:
+	var path: String = _temp_path()
+	SettingsManager.save_to_path({
+		SettingsManager.KEY_SKIP_TITLE: true,
+	}, path)
+	var restored: Dictionary = SettingsManager.load_from_path(path)
+	assert_true(restored[SettingsManager.KEY_SKIP_TITLE])
+
+
+func test_skip_title_coerces_non_bool_values() -> void:
+	# A truthy non-bool (1, "true", non-empty array) should normalize to true.
+	# Falsy values should normalize to false. Matches Godot's bool() semantics.
+	var normalized: Dictionary = SettingsManager.normalize({
+		SettingsManager.KEY_SKIP_TITLE: 1,
+	})
+	assert_true(normalized[SettingsManager.KEY_SKIP_TITLE])
+
+	normalized = SettingsManager.normalize({
+		SettingsManager.KEY_SKIP_TITLE: 0,
+	})
+	assert_false(normalized[SettingsManager.KEY_SKIP_TITLE])
