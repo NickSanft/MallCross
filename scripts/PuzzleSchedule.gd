@@ -5,10 +5,10 @@ extends RefCounted
 # food-court table looks this up at interact time — solving day N at one
 # difficulty doesn't affect the other tiers' day N puzzles.
 #
-# Phase 10.1 ships:
-#   - MINI: full 7-day schedule (mall_day_one ... mall_day_seven)
-#   - MIDI: day 1 only (mall_midi_day_one)
-#   - FULL: day 1 only (mall_full_day_one)
+# Schedule history:
+#   Phase 10.1 — MINI 7 days, MIDI day 1, FULL day 1.
+#   Phase 13a (v1.0.2) — MINI extended to 13 days (mall_day_eight … _thirteen).
+#   MIDI and FULL still day 1; extended in 13b / 13c.
 # Future phases extend MIDI and FULL with more days; the data structure is
 # already ready, no code changes needed.
 
@@ -24,6 +24,12 @@ const _MINI_SCHEDULE: Dictionary = {
 	5: "mall_day_five",
 	6: "mall_day_six",
 	7: "mall_day_seven",
+	8: "mall_day_eight",
+	9: "mall_day_nine",
+	10: "mall_day_ten",
+	11: "mall_day_eleven",
+	12: "mall_day_twelve",
+	13: "mall_day_thirteen",
 }
 
 const _MIDI_SCHEDULE: Dictionary = {

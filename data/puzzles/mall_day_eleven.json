@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Eleven",
+	"author": "MallCross",
+	"theme": "Winter at the mall",
+	"size": 5,
+	"grid": [
+		"LEDGE",
+		"O###L",
+		"SCARF",
+		"E###I",
+		"RERAN"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Narrow shelf on a cliff face"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Person who didn't win"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Small, mischievous, fairylike"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Knitted neck warmer"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Aired again, like an old sitcom"}
+	]
+}

@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Twelve",
+	"author": "MallCross",
+	"theme": "Values and loans",
+	"size": 5,
+	"grid": [
+		"REPAY",
+		"A###O",
+		"ICILY",
+		"S###O",
+		"ETHOS"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Pay back a borrowed sum"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Lift higher; or a pay bump"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "String toys that go up and down"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "With a frosty tone"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Guiding values of a group"}
+	]
+}

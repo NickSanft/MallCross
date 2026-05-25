@@ -30,20 +30,28 @@ func test_has_puzzle_true_for_scheduled() -> void:
 
 
 func test_has_puzzle_false_for_unscheduled() -> void:
-	assert_false(PuzzleSchedule.has_puzzle_for_day(8))
+	# Day 14+: beyond the current MINI schedule (extended to 13 in v1.0.2).
+	# Asserts the schedule has a well-defined endpoint rather than a specific
+	# length so this test survives future extensions.
+	var beyond: int = PuzzleSchedule.last_scheduled_day() + 1
+	assert_false(PuzzleSchedule.has_puzzle_for_day(beyond))
 
 
 func test_scheduled_days_returns_sorted_list() -> void:
 	var days: Array = PuzzleSchedule.scheduled_days()
-	assert_eq(days, [1, 2, 3, 4, 5, 6, 7])
+	# Days 1-13 in v1.0.2; will grow to 14 on the next MINI content drop.
+	assert_eq(days, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
 
 
 func test_last_scheduled_day_returns_max() -> void:
-	assert_eq(PuzzleSchedule.last_scheduled_day(), 7)
+	assert_eq(PuzzleSchedule.last_scheduled_day(), 13)
 
 
 func test_full_week_each_day_has_puzzle() -> void:
-	for day in range(1, 8):
+	# Originally a "first 7 days" guarantee; broadened in v1.0.2 to "every
+	# scheduled day in MINI maps to a non-empty puzzle id." The original
+	# property still holds — days 1-7 ARE still scheduled.
+	for day in PuzzleSchedule.scheduled_days():
 		assert_true(PuzzleSchedule.has_puzzle_for_day(day), "Day %d should have a puzzle scheduled" % day)
 
 

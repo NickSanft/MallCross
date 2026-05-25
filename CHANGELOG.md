@@ -4,6 +4,44 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-05-25 — Phase 13a: Six more MINI puzzles
+
+Pure content drop. MINI tier extended from days 1-7 to **days 1-13**, giving a near-two-week rotation before any repeats.
+
+### Added
+- **Six new MINI puzzles** (`mall_day_eight.json` through `mall_day_thirteen.json`), all 5x5 with the standard `.###. / ... / .###.` block pattern. Each follows the now-canonical pipeline: generate with `tools/puzzle_generate.gd -- mini <out> <seed>`, then hand-author all 5 clues. Theme grids at a glance:
+  - **Day 8** — `CLING / COCOA / GRIEF / CHILI / ALOOF` (seed 2). Theme: "A second week begins."
+  - **Day 9** — `SWORE / SIZED / EASED / ZONES / DRUID` (seed 4). Theme: "Oaths and time."
+  - **Day 10** — `GENRE / GRUNT / EVADE / ULTRA / TENSE` (seed 8). Theme: "Extreme categories."
+  - **Day 11** — `LEDGE / LOSER / ELFIN / SCARF / RERAN` (seed 10). Theme: "Winter at the mall."
+  - **Day 12** — `REPAY / RAISE / YOYOS / ICILY / ETHOS` (seed 11). Theme: "Values and loans."
+  - **Day 13** — `SEIZE / SLUNK / EVICT / UTERI / KNELT` (seed 12). Theme: "Past-tense action."
+- **Six new NPC hint files** (`data/hints/mall_day_*.json`), one per puzzle. Each names the three roles (`food_court_patron_a`, `food_court_patron_b`, `corridor_shopper`) and nudges the player toward three of the puzzle's answers without giving them away.
+
+### Changed
+- **`PuzzleSchedule._MINI_SCHEDULE`** extended from 7 to 13 entries. Days 1-7 unchanged; days 8-13 added.
+- **`tests/test_puzzle_schedule.gd`** updated to assert the new schedule shape. The "first 7 days are scheduled" guarantee is now expressed as "every scheduled day has a puzzle" — same property, more durable as the schedule grows.
+
+### Why it matters
+With MINI rotation extended to 13 days, a player who solves daily takes nearly two weeks to see a repeat — long enough that the streak system feels like it's actually tracking something real rather than burning through the entire content set in a week. The MIDI / FULL tiers still only have day 1; Phases 13b and 13c address those next.
+
+### Architecture
+- **No new code.** This is a pure data + schedule drop. The generator + validator + hint roster + per-puzzle best time tracking from earlier phases all transparently absorb the new files — no glue required.
+- **Hint roles are stable across days.** Every MINI puzzle's hint file declares exactly the same three NPC roles, so `HintRoster` can resolve dialog regardless of which day's puzzle is active. This consistency was implicit before; it's now battle-tested across 13 puzzles.
+
+### Pre-push checklist (Phase 13a / v1.0.2)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 15 puzzle files (13 MINI + 1 MIDI + 1 FULL).
+- [x] GUT: 342/342 tests passing (4 schedule tests updated for new size; no new tests, no test count change).
+
+### Known limitations
+- **MIDI and FULL are still single-day.** Phases 13b and 13c will extend them.
+- **All MINI down clues are 5 letters** because of the fixed block pattern. A future pattern variation (e.g. mixed `.##.. / ..##.`) could mix in 3/4-letter slots for variety.
+
+[1.0.2]: https://github.com/NickSanft/MallCross/releases/tag/v1.0.2
+
 ## [1.0.1] - 2026-05-24 — Phase 12: Polish bundle
 
 First post-1.0 polish patch. Five small features bundled to give the v1.0.0 binary a pulse.

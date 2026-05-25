@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Nine",
+	"author": "MallCross",
+	"theme": "Oaths and time",
+	"size": 5,
+	"grid": [
+		"SWORE",
+		"I###A",
+		"ZONES",
+		"E###E",
+		"DRUID"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Took an oath in court"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Gauged the dimensions of"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Relieved; took the pressure off"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Time ___; pacific, eastern, etc."},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Ancient Celtic priest"}
+	]
+}

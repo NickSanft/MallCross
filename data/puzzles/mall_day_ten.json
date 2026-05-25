@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Ten",
+	"author": "MallCross",
+	"theme": "Extreme categories",
+	"size": 5,
+	"grid": [
+		"GENRE",
+		"R###V",
+		"ULTRA",
+		"N###D",
+		"TENSE"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Category of film, music, or fiction"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Foot soldier; or a low animal sound"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Dodge cleverly; escape capture"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Prefix meaning 'extreme' or 'beyond'"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Anxious; or a grammatical time"}
+	]
+}

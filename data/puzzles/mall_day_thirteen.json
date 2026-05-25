@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Thirteen",
+	"author": "MallCross",
+	"theme": "Past-tense action",
+	"size": 5,
+	"grid": [
+		"SEIZE",
+		"L###V",
+		"UTERI",
+		"N###C",
+		"KNELT"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Grab forcefully and suddenly"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Crept away in shame (past tense of slink)"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Force out of a rented property"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Plural of the organ where a baby grows"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Got down on one knee (past tense)"}
+	]
+}

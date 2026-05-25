@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"title": "Mall Day Eight",
+	"author": "MallCross",
+	"theme": "A second week begins",
+	"size": 5,
+	"grid": [
+		"CLING",
+		"O###R",
+		"CHILI",
+		"O###E",
+		"ALOOF"
+	],
+	"clues": [
+		{"number": 1, "direction": "across", "row": 0, "col": 0, "length": 5, "text": "Hold on tight; refuse to let go"},
+		{"number": 1, "direction": "down", "row": 0, "col": 0, "length": 5, "text": "Chocolate drink mix"},
+		{"number": 2, "direction": "down", "row": 0, "col": 4, "length": 5, "text": "Deep sorrow following a loss"},
+		{"number": 3, "direction": "across", "row": 2, "col": 0, "length": 5, "text": "Spicy stew with beans and ground beef"},
+		{"number": 4, "direction": "across", "row": 4, "col": 0, "length": 5, "text": "Standoffish; emotionally distant"}
+	]
+}
