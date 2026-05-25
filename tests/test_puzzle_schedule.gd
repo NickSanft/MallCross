@@ -72,12 +72,27 @@ func test_midi_day_one_has_puzzle() -> void:
 	assert_eq(PuzzleSchedule.puzzle_id_for_day(1, PuzzleSchedule.DIFFICULTY_MIDI), "mall_midi_day_one")
 
 
-func test_midi_day_two_returns_empty() -> void:
-	assert_eq(PuzzleSchedule.puzzle_id_for_day(2, PuzzleSchedule.DIFFICULTY_MIDI), "")
+func test_midi_day_two_returns_midi_day_two_now() -> void:
+	# v1.0.3 extended MIDI to 7 days. Asserts the new schedule shape and that
+	# the puzzle id follows the day-number naming convention.
+	assert_eq(PuzzleSchedule.puzzle_id_for_day(2, PuzzleSchedule.DIFFICULTY_MIDI), "mall_midi_day_two")
+
+
+func test_midi_beyond_schedule_returns_empty() -> void:
+	# Beyond the current MIDI schedule (extends to 7 days in v1.0.3).
+	var beyond: int = PuzzleSchedule.last_scheduled_day(PuzzleSchedule.DIFFICULTY_MIDI) + 1
+	assert_eq(PuzzleSchedule.puzzle_id_for_day(beyond, PuzzleSchedule.DIFFICULTY_MIDI), "")
 
 
 func test_midi_last_scheduled_day() -> void:
-	assert_eq(PuzzleSchedule.last_scheduled_day(PuzzleSchedule.DIFFICULTY_MIDI), 1)
+	assert_eq(PuzzleSchedule.last_scheduled_day(PuzzleSchedule.DIFFICULTY_MIDI), 7)
+
+
+func test_midi_all_seven_days_distinct() -> void:
+	var ids: Dictionary = {}
+	for day in PuzzleSchedule.scheduled_days(PuzzleSchedule.DIFFICULTY_MIDI):
+		ids[PuzzleSchedule.puzzle_id_for_day(day, PuzzleSchedule.DIFFICULTY_MIDI)] = true
+	assert_eq(ids.size(), PuzzleSchedule.scheduled_days(PuzzleSchedule.DIFFICULTY_MIDI).size())
 
 
 # ---- FULL ----

@@ -6,11 +6,12 @@ extends RefCounted
 # difficulty doesn't affect the other tiers' day N puzzles.
 #
 # Schedule history:
-#   Phase 10.1 — MINI 7 days, MIDI day 1, FULL day 1.
+#   Phase 10.1   — MINI 7 days, MIDI day 1, FULL day 1.
 #   Phase 13a (v1.0.2) — MINI extended to 13 days (mall_day_eight … _thirteen).
-#   MIDI and FULL still day 1; extended in 13b / 13c.
-# Future phases extend MIDI and FULL with more days; the data structure is
-# already ready, no code changes needed.
+#   Phase 13b (v1.0.3) — MIDI extended to 7 days (mall_midi_day_two … _seven).
+#   FULL still day 1; extended in 13c.
+# Future phases extend FULL with more days; the data structure is already
+# ready, no code changes needed.
 
 const DIFFICULTY_MINI: String = "mini"
 const DIFFICULTY_MIDI: String = "midi"
@@ -34,6 +35,12 @@ const _MINI_SCHEDULE: Dictionary = {
 
 const _MIDI_SCHEDULE: Dictionary = {
 	1: "mall_midi_day_one",
+	2: "mall_midi_day_two",
+	3: "mall_midi_day_three",
+	4: "mall_midi_day_four",
+	5: "mall_midi_day_five",
+	6: "mall_midi_day_six",
+	7: "mall_midi_day_seven",
 }
 
 const _FULL_SCHEDULE: Dictionary = {

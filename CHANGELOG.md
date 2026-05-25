@@ -4,6 +4,44 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-05-25 — Phase 13b: Six more MIDI puzzles
+
+Pure content drop. MIDI tier extended from day 1 only to **days 1-7**, giving the mid-difficulty rotation a full week before any repeats.
+
+### Added
+- **Six new MIDI puzzles** (`mall_midi_day_two.json` through `mall_midi_day_seven.json`), all 9x9 with the bundled symmetric pattern (three 4-letter slots per top/bottom row + 9-letter spine + 3-letter center column). Each follows the standard pipeline: generate with `tools/puzzle_generate.gd -- midi <out> <seed>`, then hand-clue all 30 slots. Spines at a glance:
+  - **Day 2** — spine **AFFILIATE** (seed 2). Theme: "Second helping."
+  - **Day 3** — spine **ANCESTRAL** (seed 4). Theme: "Family tree."
+  - **Day 4** — spine **ADVANCING** (seed 8). Theme: "Making progress."
+  - **Day 5** — spine **ADVERSELY** (seed 10). Theme: "Bad-luck day."
+  - **Day 6** — spine **ANARCHIST** (seed 11). Theme: "Rebel without a cause."
+  - **Day 7** — spine **ACCORDING** (seed 12). Theme: "By the book."
+- **Six new NPC hint files** in `data/hints/`, matching the puzzle IDs. Each names the three roles (`food_court_patron_a`, `food_court_patron_b`, `corridor_shopper`) with hints that nudge toward three different answers — usually one of the 4-letter words, one of the 3-letter downs, and one anchor (often the spine).
+
+### Changed
+- **`PuzzleSchedule._MIDI_SCHEDULE`** extended from 1 to 7 entries. Day 1 (`mall_midi_day_one`) unchanged; days 2-7 added.
+- **`tests/test_puzzle_schedule.gd`** updated. The old "day 2 returns empty" assertion is replaced with "day 2 returns `mall_midi_day_two`"; a generic "beyond-schedule returns empty" test takes the empty-day check. New assertion: all 7 MIDI puzzle IDs are distinct.
+
+### Why it matters
+With MIDI rotation at 7 days, the medium difficulty tier finally feels like a real weekly cycle. Combined with v1.0.2's 13-day MINI rotation, a daily player now has nearly 3 weeks of unique content across MINI + MIDI without seeing the same puzzle twice. The FULL tier still only has day 1; Phase 13c addresses that.
+
+### Architecture
+- **Same pipeline, scaled up.** 30 slots per MIDI puzzle (12 across × 4 letters, 1 across × 9 letters, 16 downs × 3 letters, 1 down × 3 letters) means ~180 hand-clued slots in one ship — much more clue-authoring effort than MINI, but still the same generate-then-clue flow.
+- **No new game code.** The generator + validator + hint roster + per-puzzle best time tracking absorb the new files transparently.
+- **Hint difficulty calibration.** MIDI hints lean slightly more cryptic than MINI (often using fill-in-the-blank format with `___`) to match the puzzle difficulty step-up.
+
+### Pre-push checklist (Phase 13b / v1.0.3)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 21 puzzle files (13 MINI + 7 MIDI + 1 FULL).
+- [x] GUT: 344/344 tests passing (added 2 MIDI schedule tests; total up from 342).
+
+### Known limitations
+- **FULL is still single-day.** Phase 13c will extend it.
+- **Wordlist density at length 9 is uneven.** The 6 spines we got are all `A`-prefixed (AFFILIATE, ANCESTRAL, ADVANCING, ADVERSELY, ANARCHIST, ACCORDING) — that's an artifact of MRV selecting the most-constrained 9-letter slot and the wordlist's coverage. A future wordlist expansion would diversify spine letters.
+
+[1.0.3]: https://github.com/NickSanft/MallCross/releases/tag/v1.0.3
+
 ## [1.0.2] - 2026-05-25 — Phase 13a: Six more MINI puzzles
 
 Pure content drop. MINI tier extended from days 1-7 to **days 1-13**, giving a near-two-week rotation before any repeats.
