@@ -160,3 +160,162 @@ func test_skip_title_coerces_non_bool_values() -> void:
 		SettingsManager.KEY_SKIP_TITLE: 0,
 	})
 	assert_false(normalized[SettingsManager.KEY_SKIP_TITLE])
+
+
+# ----- FOV (introduced in v1.1.0) ------------------------------------
+
+func test_defaults_include_fov() -> void:
+	var defaults: Dictionary = SettingsManager.default_settings()
+	assert_true(defaults.has(SettingsManager.KEY_FOV))
+	assert_eq(defaults[SettingsManager.KEY_FOV], SettingsManager.DEFAULT_FOV)
+
+
+func test_normalize_clamps_fov_low() -> void:
+	var normalized: Dictionary = SettingsManager.normalize({
+		SettingsManager.KEY_FOV: 1.0,
+	})
+	assert_eq(normalized[SettingsManager.KEY_FOV], SettingsManager.MIN_FOV)
+
+
+func test_normalize_clamps_fov_high() -> void:
+	var normalized: Dictionary = SettingsManager.normalize({
+		SettingsManager.KEY_FOV: 999.0,
+	})
+	assert_eq(normalized[SettingsManager.KEY_FOV], SettingsManager.MAX_FOV)
+
+
+func test_fov_round_trips_via_disk() -> void:
+	var path: String = _temp_path()
+	SettingsManager.save_to_path({
+		SettingsManager.KEY_FOV: 90.0,
+	}, path)
+	var restored: Dictionary = SettingsManager.load_from_path(path)
+	assert_eq(restored[SettingsManager.KEY_FOV], 90.0)
+
+
+# ----- SFX / Music buses (introduced in v1.1.0) ----------------------
+
+func test_defaults_include_sfx_and_music() -> void:
+	var defaults: Dictionary = SettingsManager.default_settings()
+	assert_true(defaults.has(SettingsManager.KEY_SFX_VOLUME_DB))
+	assert_true(defaults.has(SettingsManager.KEY_MUSIC_VOLUME_DB))
+
+
+func test_normalize_clamps_sfx_volume_high() -> void:
+	var normalized: Dictionary = SettingsManager.normalize({
+		SettingsManager.KEY_SFX_VOLUME_DB: 999.0,
+	})
+	assert_eq(normalized[SettingsManager.KEY_SFX_VOLUME_DB], SettingsManager.MAX_SFX_VOLUME_DB)
+
+
+func test_normalize_clamps_music_volume_low() -> void:
+	var normalized: Dictionary = SettingsManager.normalize({
+		SettingsManager.KEY_MUSIC_VOLUME_DB: -999.0,
+	})
+	assert_eq(normalized[SettingsManager.KEY_MUSIC_VOLUME_DB], SettingsManager.MIN_MUSIC_VOLUME_DB)
+
+
+func test_sfx_music_round_trip_via_disk() -> void:
+	var path: String = _temp_path()
+	SettingsManager.save_to_path({
+		SettingsManager.KEY_SFX_VOLUME_DB: -3.0,
+		SettingsManager.KEY_MUSIC_VOLUME_DB: -12.0,
+	}, path)
+	var restored: Dictionary = SettingsManager.load_from_path(path)
+	assert_eq(restored[SettingsManager.KEY_SFX_VOLUME_DB], -3.0)
+	assert_eq(restored[SettingsManager.KEY_MUSIC_VOLUME_DB], -12.0)
+
+
+# ----- v1.0.x → v1.1.0 footstep_volume_db → sfx_volume_db migration --
+
+func test_footstep_migrates_into_sfx_when_sfx_missing() -> void:
+	# v1.0.x save: has footstep_volume_db, no sfx_volume_db. After load,
+	# the footstep value should populate sfx_volume_db so loudness doesn't
+	# reset on upgrade.
+	var normalized: Dictionary = SettingsManager.normalize({
+		SettingsManager.KEY_FOOTSTEP_VOLUME_DB: -16.0,
+	})
+	assert_eq(normalized[SettingsManager.KEY_SFX_VOLUME_DB], -16.0)
+
+
+func test_explicit_sfx_value_overrides_legacy_footstep() -> void:
+	# v1.1.0+ save: both keys present. Explicit sfx_volume_db wins; we
+	# don't overwrite it with the legacy footstep value.
+	var normalized: Dictionary = SettingsManager.normalize({
+		SettingsManager.KEY_FOOTSTEP_VOLUME_DB: -30.0,
+		SettingsManager.KEY_SFX_VOLUME_DB: -2.0,
+	})
+	assert_eq(normalized[SettingsManager.KEY_SFX_VOLUME_DB], -2.0)
+
+
+# ----- Key bindings (introduced in v1.1.0) ---------------------------
+
+func test_defaults_include_empty_key_bindings() -> void:
+	var defaults: Dictionary = SettingsManager.default_settings()
+	assert_true(defaults.has(SettingsManager.KEY_BINDINGS))
+	assert_true(defaults[SettingsManager.KEY_BINDINGS] is Dictionary)
+	assert_eq((defaults[SettingsManager.KEY_BINDINGS] as Dictionary).size(), 0)
+
+
+func test_key_bindings_accept_known_actions() -> void:
+	var normalized: Dictionary = SettingsManager.normalize({
+		SettingsManager.KEY_BINDINGS: {
+			"move_forward": KEY_W,
+			"jump": KEY_SPACE,
+		},
+	})
+	var bindings: Dictionary = normalized[SettingsManager.KEY_BINDINGS]
+	assert_eq(bindings["move_forward"], KEY_W)
+	assert_eq(bindings["jump"], KEY_SPACE)
+
+
+func test_key_bindings_reject_unknown_actions() -> void:
+	# Unknown action names get filtered — settings can't smuggle bindings
+	# for actions the rebind UI doesn't expose.
+	var normalized: Dictionary = SettingsManager.normalize({
+		SettingsManager.KEY_BINDINGS: {
+			"move_forward": KEY_W,
+			"secret_admin_console": KEY_F12,
+			"ui_cancel": KEY_ESCAPE,
+		},
+	})
+	var bindings: Dictionary = normalized[SettingsManager.KEY_BINDINGS]
+	assert_true(bindings.has("move_forward"))
+	assert_false(bindings.has("secret_admin_console"))
+	assert_false(bindings.has("ui_cancel"))
+
+
+func test_key_bindings_reject_zero_or_negative_codes() -> void:
+	var normalized: Dictionary = SettingsManager.normalize({
+		SettingsManager.KEY_BINDINGS: {
+			"move_forward": 0,
+			"jump": -100,
+			"sprint": KEY_SHIFT,
+		},
+	})
+	var bindings: Dictionary = normalized[SettingsManager.KEY_BINDINGS]
+	assert_false(bindings.has("move_forward"))
+	assert_false(bindings.has("jump"))
+	assert_eq(bindings["sprint"], KEY_SHIFT)
+
+
+func test_key_bindings_round_trip_via_disk() -> void:
+	var path: String = _temp_path()
+	SettingsManager.save_to_path({
+		SettingsManager.KEY_BINDINGS: {
+			"move_forward": KEY_W,
+			"interact": KEY_F,
+		},
+	}, path)
+	var restored: Dictionary = SettingsManager.load_from_path(path)
+	var bindings: Dictionary = restored[SettingsManager.KEY_BINDINGS]
+	assert_eq(bindings["move_forward"], KEY_W)
+	assert_eq(bindings["interact"], KEY_F)
+
+
+func test_rebindable_actions_list_matches_default_inputmap() -> void:
+	# Every action in REBINDABLE_ACTIONS should be a real action in the
+	# project.godot InputMap. Guards against typos or actions being
+	# removed without updating SettingsManager.
+	for action in SettingsManager.REBINDABLE_ACTIONS:
+		assert_true(InputMap.has_action(action), "Action '%s' should exist in InputMap" % action)

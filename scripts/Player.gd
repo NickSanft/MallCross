@@ -48,6 +48,10 @@ func _setup_footstep_player() -> void:
 	_footstep_player.name = "FootstepPlayer"
 	_footstep_player.stream = FootstepAudio.make_footstep_stream()
 	_footstep_player.volume_db = FOOTSTEP_VOLUME_DB
+	# Route through the SFX bus introduced in v1.1.0. The bus volume is the
+	# player-facing "SFX" slider; per-source volume_db stays as a fine-grain
+	# offset for future polish (e.g. quieter footsteps on carpet).
+	_footstep_player.bus = "SFX"
 	# Player IS the source — keep audio simple, no spatial falloff math needed.
 	_footstep_player.unit_size = 1.0
 	add_child(_footstep_player)
@@ -86,6 +90,14 @@ func set_mouse_sensitivity(value: float) -> void:
 func set_footstep_volume_db(volume_db: float) -> void:
 	if _footstep_player != null:
 		_footstep_player.volume_db = volume_db
+
+
+func set_fov(degrees: float) -> void:
+	# Sets the camera's vertical field-of-view. Standard FPS values are
+	# 70-90; the SettingsManager clamps to 60-110 (matches what most
+	# first-person games expose).
+	if camera != null:
+		camera.fov = degrees
 
 
 func _physics_process(delta: float) -> void:

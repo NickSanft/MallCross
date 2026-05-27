@@ -93,9 +93,39 @@ func _apply_settings(settings: Dictionary) -> void:
 	var clean: Dictionary = SettingsManager.normalize(settings)
 	_player.set_mouse_sensitivity(float(clean[SettingsManager.KEY_MOUSE_SENSITIVITY]))
 	_player.set_footstep_volume_db(float(clean[SettingsManager.KEY_FOOTSTEP_VOLUME_DB]))
-	var master_bus: int = AudioServer.get_bus_index("Master")
-	if master_bus >= 0:
-		AudioServer.set_bus_volume_db(master_bus, float(clean[SettingsManager.KEY_MASTER_VOLUME_DB]))
+	_player.set_fov(float(clean[SettingsManager.KEY_FOV]))
+	# v1.1.0: route through 3-bus layout. AudioServer.get_bus_index returns
+	# -1 if a named bus is missing — guard each lookup so a misconfigured
+	# default_bus_layout.tres doesn't crash startup.
+	_set_bus_volume("Master", float(clean[SettingsManager.KEY_MASTER_VOLUME_DB]))
+	_set_bus_volume("SFX", float(clean[SettingsManager.KEY_SFX_VOLUME_DB]))
+	_set_bus_volume("Music", float(clean[SettingsManager.KEY_MUSIC_VOLUME_DB]))
+	# Apply any persisted key rebindings to the live InputMap.
+	_apply_key_bindings(clean.get(SettingsManager.KEY_BINDINGS, {}))
+
+
+func _set_bus_volume(bus_name: String, db: float) -> void:
+	var idx: int = AudioServer.get_bus_index(bus_name)
+	if idx >= 0:
+		AudioServer.set_bus_volume_db(idx, db)
+
+
+func _apply_key_bindings(bindings: Dictionary) -> void:
+	# Reinstall every rebindable action's keycode from the persisted dict.
+	# Actions not in the dict keep their project.godot defaults — settings
+	# only overrides; it doesn't store the full InputMap.
+	for action in SettingsManager.REBINDABLE_ACTIONS:
+		if not bindings.has(action):
+			continue
+		var code: int = int(bindings[action])
+		if code <= 0:
+			continue
+		if not InputMap.has_action(action):
+			continue
+		InputMap.action_erase_events(action)
+		var event: InputEventKey = InputEventKey.new()
+		event.physical_keycode = code
+		InputMap.action_add_event(action, event)
 
 
 func _refresh_hud() -> void:

@@ -4,6 +4,52 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-27 — Phase 14: Settings menu completion
+
+First minor-version bump after the 1.0.x patch chain. Settings finally let the player tune everything that affects feel: input, audio mix, and key bindings.
+
+### Added
+- **FOV slider** (60°–110°, default 75°). Hooks into `Camera3D.fov` via the new `Player.set_fov()` method. Live preview as you drag — no menu reopen needed.
+- **Three-bus audio layout** in `default_bus_layout.tres`. **Master** sits at the top; **SFX** (footsteps now, future UI clicks + solve dings) and **Music** (future ambient muzak + jukebox) both route through Master. Music defaults to -6 dB so it sits under SFX by design.
+- **SFX and Music volume sliders** (-60 to +6 dB each). Drive `AudioServer.set_bus_volume_db` against the corresponding bus indices, with `AudioServer.get_bus_index >= 0` guards in case a misconfigured `.tres` ever leaves a bus missing.
+- **Key rebinding UI.** New "Key bindings" section in the settings menu with one row per rebindable action: **Move forward / back / left / right, Jump, Sprint, Interact**. Click a bind button → "Press a key..." → next keypress (other than Esc, which cancels) becomes the new binding. Persisted as `key_bindings: { action: physical_keycode }` in `settings.json` and reapplied to `InputMap` on every load.
+- **`SettingsManager.REBINDABLE_ACTIONS`** as the canonical allow-list of rebindable actions. Settings can't smuggle bindings for actions outside this list (Esc, in-puzzle keys, `ui_*` actions all stay locked).
+- **`Player.set_fov(degrees)`** method.
+- **`GameController._apply_settings`** new wirings: FOV → Player, SFX/Music bus volumes → AudioServer, key_bindings dict → InputMap.
+
+### Changed
+- **`project.godot`** version bumped to `1.1.0`. Added `[audio] buses/default_bus_layout = "res://default_bus_layout.tres"` so Godot loads the new three-bus layout at startup.
+- **`scripts/Player.gd::_setup_footstep_player`** now sets `_footstep_player.bus = "SFX"` so footsteps route through the new bus. Per-source `volume_db` stays as a fine-grain offset (legacy "Footstep volume" slider).
+- **`SettingsManager`** schema expansion + migration:
+  - New keys: `sfx_volume_db`, `music_volume_db`, `fov`, `key_bindings`.
+  - Legacy `footstep_volume_db` retained as the SFX-bus fine-grain offset.
+  - **Forward migration:** if a v1.0.x save has `footstep_volume_db` but no `sfx_volume_db`, the legacy value is copied into the new key so perceived footstep loudness doesn't reset on first launch.
+  - `key_bindings` filter: only entries whose action is in `REBINDABLE_ACTIONS` and whose value is a positive int survive normalization.
+
+### UX details
+- **Esc cancels rebinding** — when the player has clicked a bind button and is in "Press a key..." mode, Esc closes the rebind state without closing the whole menu. Press Esc *again* (or click Close) to dismiss the settings.
+- Settings menu now has Input / Audio / Key bindings / Other section labels so the doubled length doesn't feel like one giant wall of sliders.
+- Bind buttons have `focus_mode = NONE` so clicking them doesn't steal keyboard focus from the menu's `_unhandled_input` handler — the rebind would never see the next keypress otherwise.
+
+### Architecture
+- **Bus indices not constants.** `AudioServer.get_bus_index` is queried at apply-settings time. Cheap (~µs) and survives any future bus-layout reshuffling without code edits.
+- **Apply-on-load.** `GameController._ready` already calls `_apply_settings(_settings)` once at startup; the new `_apply_key_bindings` call reuses that hook to reinstate persisted rebindings via `InputMap.action_erase_events` + `action_add_event`. No new lifecycle code needed.
+- **`Array[String]` for `REBINDABLE_ACTIONS`** — typed arrays as `const` work in GDScript 4 where `PackedStringArray(...)` constructor calls don't. (One Wordlist-style parse error caught early.)
+
+### Pre-push checklist (Phase 14 / v1.1.0)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 27 puzzle files (unchanged).
+- [x] GUT: **362/362** tests passing (added 14 across FOV, SFX/Music, footstep migration, key bindings).
+
+### Known limitations
+- **No conflict detection** on rebindings. If you bind Jump to W (which is also Move forward), both actions fire on W. The fix is one of: rebind back, or wait for Phase 17 / v1.4.0 polish.
+- **Music bus is plumbed but no music plays yet.** The Phase 17 jukebox + ambient mall-muzak Phase 8 polish will route through this bus.
+- **`InputMap.action_erase_events` + `add_event` only adds key events** — joystick or mouse-button rebinds aren't exposed yet.
+
+[1.1.0]: https://github.com/NickSanft/MallCross/releases/tag/v1.1.0
+
 ## [1.0.4] - 2026-05-27 — Phase 13c: Six more FULL puzzles + generator overhaul
 
 The biggest content + code drop of the 1.0.x line. FULL tier extended from day 1 only to **days 1-7**, completing the full daily rotation across all three difficulty tiers. The generator overhaul that made this possible doubles as a long-term enabler for further FULL content drops.
