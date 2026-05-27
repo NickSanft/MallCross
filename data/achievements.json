@@ -1,0 +1,83 @@
+{
+	"version": 1,
+	"achievements": [
+		{
+			"id": "first_solve",
+			"name": "First Solve",
+			"description": "Solve your first crossword puzzle.",
+			"hidden": false
+		},
+		{
+			"id": "mini_day_one",
+			"name": "Crossword Newbie",
+			"description": "Solve the MINI Day 1 puzzle.",
+			"hidden": false
+		},
+		{
+			"id": "midi_day_one",
+			"name": "Midweek Warrior",
+			"description": "Solve the MIDI Day 1 puzzle.",
+			"hidden": false
+		},
+		{
+			"id": "full_day_one",
+			"name": "Full Steam Ahead",
+			"description": "Solve the FULL Day 1 puzzle.",
+			"hidden": false
+		},
+		{
+			"id": "streak_7",
+			"name": "Week-long Wordsmith",
+			"description": "Solve crosswords on 7 consecutive days.",
+			"hidden": false
+		},
+		{
+			"id": "streak_30",
+			"name": "Monthly Mainstay",
+			"description": "Solve crosswords on 30 consecutive days.",
+			"hidden": false
+		},
+		{
+			"id": "no_checks",
+			"name": "Going It Alone",
+			"description": "Solve a puzzle without using check-letter once.",
+			"hidden": false
+		},
+		{
+			"id": "speed_mini",
+			"name": "Speed Demon",
+			"description": "Solve a MINI puzzle in under 60 seconds.",
+			"hidden": false
+		},
+		{
+			"id": "polyglot",
+			"name": "Polyglot",
+			"description": "Solve a puzzle in each difficulty on the same in-game day.",
+			"hidden": false
+		},
+		{
+			"id": "caffeinated",
+			"name": "Caffeinated",
+			"description": "Buy the Coffee perk (check-letter ability).",
+			"hidden": false
+		},
+		{
+			"id": "bookworm",
+			"name": "Bookworm",
+			"description": "Buy the Pencil perk.",
+			"hidden": false
+		},
+		{
+			"id": "big_spender",
+			"name": "Big Spender",
+			"description": "Spend your last Woint on a purchase.",
+			"hidden": false
+		},
+		{
+			"id": "hoarder",
+			"name": "Hoarder",
+			"description": "Accumulate 1000 Woints.",
+			"hidden": false
+		}
+	]
+}

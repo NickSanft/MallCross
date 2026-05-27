@@ -22,28 +22,90 @@ var _sleeping: bool = false
 # Cached target for re-rendering the daily-puzzle prompt out-of-band (e.g.
 # after a sleep transition refreshes the day-of-week).
 var _last_seen_interactable: Node = null
+# Achievement plumbing introduced in v1.2.0. Service holds the unlock state
+# in memory; the toast queues popups; the menu lists everything. Both UIs
+# are spawned dynamically (rather than instanced from .tscn) so the
+# Main.tscn diff stays small and the lifecycle stays in this file.
+var _achievements: AchievementService
+var _achievements_toast: AchievementToast
+var _achievements_menu: AchievementsMenu
+# Snapshot of owned_items taken on shop open. Used in _on_shop_closed to
+# diff against the post-close state — anything new is a fresh purchase
+# that needs notify_item_purchased.
+var _owned_items_before_shop: Array = []
 
 
 func _ready() -> void:
 	_profile = ProfileStore.load_from_path()
 	_settings = SettingsManager.load_from_path()
+	_setup_achievements()
 	_refresh_hud()
 	_apply_settings(_settings)
 	_player.interactable_changed.connect(_on_interactable_changed)
 	_player.interaction_triggered.connect(_on_interaction_triggered)
 	_crossword_ui.closed.connect(_on_crossword_closed)
-	# puzzle_solved now carries the in-puzzle elapsed time in ms so we can
-	# record per-puzzle bests. Older binding (no arg) would still receive
-	# the call but the elapsed_ms wouldn't be used.
+	# puzzle_solved carries (elapsed_ms, used_check_letter) since v1.2.0 so
+	# we can record per-puzzle bests AND gate the no_checks achievement.
 	_crossword_ui.puzzle_solved.connect(_on_puzzle_solved)
 	_shop_ui.closed.connect(_on_shop_closed)
 	_hud.fade_to_black_done.connect(_on_fade_to_black_done)
 	_settings_menu.settings_changed.connect(_on_settings_changed)
 	_settings_menu.closed.connect(_on_settings_closed)
 	_settings_menu.reset_save_requested.connect(_on_reset_save_requested)
+	_settings_menu.achievements_requested.connect(_on_achievements_requested)
 	# MallGreybox.spawn_npcs() ran inside its own _ready before us. Rewrite
 	# each NPC's dialog with today's puzzle hint where one exists.
 	_mall.apply_npc_hints_for_day(_profile.current_day)
+	# Check the "hoarder" threshold once at startup so a player who already
+	# has 1000+ Woints in their save gets the unlock the moment they boot,
+	# not the next time they earn one Woint.
+	var fired: Array = _achievements.notify_woints(_profile.woints, _profile.current_day)
+	_push_unlocks(fired)
+
+
+func _setup_achievements() -> void:
+	var catalog: Array = AchievementCatalog.load_all()
+	var saved_unlocks: Dictionary = AchievementStore.load_from_path()
+	_achievements = AchievementService.new(catalog, saved_unlocks)
+
+	_achievements_menu = AchievementsMenu.new()
+	_achievements_menu.name = "AchievementsMenu"
+	_achievements_menu.anchor_right = 1.0
+	_achievements_menu.anchor_bottom = 1.0
+	_achievements_menu.closed.connect(_on_achievements_menu_closed)
+	add_child(_achievements_menu)
+
+	_achievements_toast = AchievementToast.new()
+	_achievements_toast.name = "AchievementsToast"
+	# Toast is added last so it z-orders above the menu/HUD when both are
+	# visible (rare, but the order is the cheap insurance policy).
+	add_child(_achievements_toast)
+
+
+func _push_unlocks(ids: Array) -> void:
+	# Routes newly-fired achievement ids to the toast queue and persists
+	# the unlock state. No-op for an empty array, so the standard pattern is:
+	#   var fired = _achievements.notify_*(...)
+	#   _push_unlocks(fired)
+	# without conditional plumbing at every call site.
+	if ids == null or ids.is_empty():
+		return
+	for id in ids:
+		_achievements_toast.enqueue(_achievements.recently_unlocked_entry(String(id)))
+	AchievementStore.save_to_path(_achievements.unlocks)
+
+
+func _on_achievements_requested() -> void:
+	# Opened from inside the SettingsMenu's Achievements button. Layers on
+	# top of the settings; closing the achievements menu returns focus to
+	# settings without closing settings itself.
+	_achievements_menu.open_menu(_achievements)
+
+
+func _on_achievements_menu_closed() -> void:
+	# Re-grab focus on the settings menu so Esc + arrow nav keep working.
+	if _settings_menu.visible:
+		_settings_menu.grab_focus()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -58,7 +120,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _is_any_modal_open() -> bool:
-	return _crossword_ui.visible or _shop_ui.visible or _settings_menu.visible
+	return _crossword_ui.visible or _shop_ui.visible or _settings_menu.visible or _achievements_menu.visible
 
 
 func _open_settings_menu() -> void:
@@ -84,7 +146,9 @@ func _on_settings_closed() -> void:
 
 func _on_reset_save_requested() -> void:
 	ProfileStore.delete_at_path()
+	AchievementStore.delete_at_path()
 	_profile = ProfileStore.load_from_path()  # fresh defaults
+	_achievements = AchievementService.new(AchievementCatalog.load_all(), {})
 	_refresh_hud()
 	_mall.apply_npc_hints_for_day(_profile.current_day)
 
@@ -239,6 +303,9 @@ func _open_puzzle(interactable: Node, puzzle_id: String) -> void:
 
 func _open_shop(interactable: Node) -> void:
 	var shop_label: String = interactable.get_meta("shop_label", "Mall Shop")
+	# Snapshot owned_items so the close handler can diff to detect any new
+	# purchases. .duplicate() is shallow-fine; owned_items holds Strings.
+	_owned_items_before_shop = _profile.owned_items.duplicate()
 	_shop_ui.open_shop(_profile, shop_label)
 	_player.set_paused_for_ui(true)
 	_hud.hide_prompt()
@@ -286,25 +353,57 @@ func _on_crossword_closed() -> void:
 
 
 func _on_shop_closed() -> void:
-	# Shop UI mutates _profile in place via try_purchase. Persist before
-	# handing the player back to mall control.
+	# Shop UI mutates _profile in place via try_purchase. Diff owned_items
+	# against the pre-open snapshot to detect new purchases; each fires the
+	# matching achievement notification. ShopUI typically allows only one
+	# purchase per visit but the diff handles N gracefully.
+	for item_id in _profile.owned_items:
+		if _owned_items_before_shop.has(item_id):
+			continue
+		var fired: Array = _achievements.notify_item_purchased(String(item_id), _profile.woints, _profile.current_day)
+		_push_unlocks(fired)
+	_owned_items_before_shop = []
 	ProfileStore.save_to_path(_profile)
 	_hud.update_woints(_profile.woints)
 	_player.set_paused_for_ui(false)
 	_player.refresh_interaction_target()
 
 
-func _on_puzzle_solved(elapsed_ms: int) -> void:
+func _on_puzzle_solved(elapsed_ms: int, used_check_letter: bool) -> void:
 	if _current_puzzle_id == "":
 		return
 	# Record the time first — applies whether or not this is the first solve,
 	# so a re-solve that improves the record still counts. Profile.record_solve_time
 	# handles the "only if better than previous" check internally.
 	_profile.record_solve_time(_current_puzzle_id, elapsed_ms)
-	if not _profile.mark_puzzle_solved(_current_puzzle_id):
-		ProfileStore.save_to_path(_profile)  # persist the (possibly new) best time
-		return  # already solved before this session — no double Woints
-	var bonus: int = WointsConfig.streak_bonus(_profile.streak)
-	_profile.add_woints(_current_reward + bonus)
+	var first_solve: bool = _profile.mark_puzzle_solved(_current_puzzle_id)
+	if first_solve:
+		var bonus: int = WointsConfig.streak_bonus(_profile.streak)
+		_profile.add_woints(_current_reward + bonus)
+		_refresh_hud()
 	ProfileStore.save_to_path(_profile)
-	_refresh_hud()
+	# Achievement notifications fire whether or not it's a first solve — a
+	# re-solve with a faster time can still earn speed_mini, and notify_woints
+	# is idempotent so calling it on every solve is fine.
+	var difficulty: String = _difficulty_for_puzzle_id(_current_puzzle_id)
+	var fired_solve: Array = _achievements.notify_puzzle_solved(
+		_current_puzzle_id, difficulty, _profile.current_day,
+		elapsed_ms, used_check_letter, _profile
+	)
+	_push_unlocks(fired_solve)
+	var fired_streak: Array = _achievements.notify_streak(_profile.streak, _profile.current_day)
+	_push_unlocks(fired_streak)
+	var fired_hoard: Array = _achievements.notify_woints(_profile.woints, _profile.current_day)
+	_push_unlocks(fired_hoard)
+
+
+func _difficulty_for_puzzle_id(puzzle_id: String) -> String:
+	# Reverse-lookup which difficulty's schedule a puzzle belongs to.
+	# Linear scan across all three tiers, total ~21 entries today — cheap.
+	# Returns "" for unknown ids (the AchievementService treats that as
+	# "no tier-specific check applies").
+	for tier in PuzzleSchedule.all_difficulties():
+		for day in PuzzleSchedule.scheduled_days(tier):
+			if PuzzleSchedule.puzzle_id_for_day(int(day), tier) == puzzle_id:
+				return tier
+	return ""

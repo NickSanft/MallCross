@@ -11,6 +11,10 @@ extends Control
 signal closed
 signal settings_changed(settings: Dictionary)
 signal reset_save_requested
+# v1.2.0: emitted when the player clicks the Achievements button. The
+# GameController catches this to open the AchievementsMenu layered over
+# the SettingsMenu (settings stays open underneath).
+signal achievements_requested
 
 var _settings: Dictionary
 var _mouse_slider: HSlider
@@ -227,6 +231,12 @@ func _build_layout() -> void:
 	footer.alignment = BoxContainer.ALIGNMENT_END
 	vbox.add_child(footer)
 
+	var achievements_button: Button = Button.new()
+	achievements_button.text = "Achievements"
+	achievements_button.add_theme_color_override("font_color", Color(1.0, 0.85, 0.30))
+	achievements_button.pressed.connect(_on_achievements_pressed)
+	footer.add_child(achievements_button)
+
 	var reset_button: Button = Button.new()
 	reset_button.text = "Reset Save"
 	reset_button.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
@@ -440,6 +450,10 @@ func _on_reset_pressed() -> void:
 
 func _on_reset_confirmed() -> void:
 	reset_save_requested.emit()
+
+
+func _on_achievements_pressed() -> void:
+	achievements_requested.emit()
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -4,6 +4,56 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-27 — Phase 15: Achievements
+
+Self-contained achievement system. Local JSON catalog, no backend, toast on unlock, browsable menu accessible from settings.
+
+### Added
+- **`data/achievements.json`** — bundled catalog of **13 starter achievements** spanning solve milestones, streak goals, perk purchases, and economy events. Each entry has `id`, `name`, `description`, `hidden` flag. Current set: First Solve, Crossword Newbie (MINI Day 1), Midweek Warrior (MIDI Day 1), Full Steam Ahead (FULL Day 1), Streak 7, Streak 30, Going It Alone (no check-letter), Speed Demon (MINI < 60s), Polyglot (one of each tier same day), Caffeinated (buy coffee), Bookworm (buy pencil), Big Spender (purchase to zero Woints), Hoarder (≥ 1000 Woints).
+- **`scripts/AchievementCatalog.gd`** — read-only loader for the bundled catalog. Defensive against missing file / malformed JSON / non-array `achievements` field / entries without `id`. Duplicate IDs keep the first occurrence.
+- **`scripts/AchievementStore.gd`** — disk I/O for `user://achievements.json`. Stores `{ id → unlock_day }` so the menu can show "unlocked on day N." Filters garbage (empty ids, negative days) on both read and write so the on-disk file stays clean even if the in-memory dict gets polluted.
+- **`scripts/AchievementService.gd`** — in-memory unlock state + the `notify_*` API. Methods:
+  - `notify_puzzle_solved(puzzle_id, difficulty, day, elapsed_ms, used_check_letter, profile)` → fires First Solve, the three day-1 IDs, Going It Alone, Speed Demon, Polyglot.
+  - `notify_streak(streak, day)` → Streak 7, Streak 30. A fresh service at streak 30 picks up *both* in one call.
+  - `notify_item_purchased(item_id, woints_remaining, day)` → Caffeinated, Bookworm, Big Spender.
+  - `notify_woints(total, day)` → Hoarder. Idempotent.
+  - Each notify returns the array of newly-fired ids so the caller can route them to the toast and persist the state.
+- **`scripts/AchievementToast.gd`** — bottom-right slide-in popup. Queue semantics: multiple unlocks on the same frame display sequentially (4-second hold each) rather than overlapping. Modulate-alpha tween for the slide-in/out so it survives the headless smoke run.
+- **`scripts/AchievementsMenu.gd`** — modal browser. Scrollable list of every catalog entry with locked/unlocked styling, "★" vs "○" marker, "Day N" tag on unlocked rows. Hidden achievements render as "???" + "(hidden until unlocked)" until they fire. Opened from a new "Achievements" button in the SettingsMenu footer.
+- **3 new test suites** (43 tests): `test_achievement_catalog.gd`, `test_achievement_store.gd`, `test_achievement_service.gd`. Service tests use a synthetic catalog so the production `data/achievements.json` can grow without breaking the assertions.
+
+### Changed
+- **`CrosswordUI.gd::puzzle_solved` signal extended** from `(elapsed_ms: int)` to `(elapsed_ms: int, used_check_letter: bool)`. The new boolean latches true the first time the player triggers check-letter in the current puzzle; resets on every `open_puzzle`. Required for the "Going It Alone" achievement.
+- **`GameController.gd`** gains the achievement service + toast + menu (spawned dynamically, no Main.tscn change):
+  - `_setup_achievements()` loads catalog + saved unlocks at boot, instantiates the toast/menu, wires signals.
+  - `_push_unlocks(ids)` helper routes fired ids to the toast queue and saves to disk.
+  - `_on_puzzle_solved` now calls `notify_puzzle_solved`, `notify_streak`, and `notify_woints` (idempotent, cheap).
+  - `_on_shop_closed` diffs `owned_items` against the pre-open snapshot to detect new purchases; each fires `notify_item_purchased`.
+  - `_ready` calls `notify_woints(profile.woints, current_day)` once so a player who already has ≥ 1000 Woints in their save gets the unlock on the very next boot.
+  - `_on_reset_save_requested` now also deletes `user://achievements.json` and rebuilds a clean service so the reset is total.
+- **`SettingsMenu.gd`** gains an "Achievements" button in the footer + `achievements_requested` signal. Achievements menu layers over settings; closing the achievements menu returns focus to settings without dismissing it.
+- **`project.godot`** version bumped to `1.2.0`.
+
+### Architecture
+- **Notify pattern.** Every gameplay event that could fire an achievement calls one of four `notify_*` methods. Each method examines the relevant condition and returns the ids it just unlocked — the caller routes them through `_push_unlocks(ids)`, a single helper that handles toast queuing + disk save. Total churn at every notify site: two lines. New achievements only need a check inside the appropriate `notify_*`, no new plumbing.
+- **Dynamic UI spawn.** `AchievementsMenu` and `AchievementToast` are `Control.new()` plus `add_child` in `_setup_achievements` — no `.tscn` files, no Main.tscn diff. Keeps the lifecycle visible in one place; tradeoff is no editor preview, which doesn't matter for code-built layouts.
+- **Catalog vs. state separation.** `AchievementCatalog` is bundled and read-only. `AchievementStore` is per-player and rewritable. The `AchievementService` glues them together at runtime. Three responsibilities, three files — same shape as Profile / ProfileStore / SettingsManager / etc.
+- **`first_solved_day` cross-tier check.** Polyglot iterates `PuzzleSchedule.all_difficulties()`, then `scheduled_days(tier)`, then `puzzle_id_for_day`, asking the profile whether `first_solved_day == current_day` for any puzzle in each tier. Future schedule expansions auto-count toward Polyglot — no service code changes needed.
+
+### Pre-push checklist (Phase 15 / v1.2.0)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 21 puzzle files (unchanged).
+- [x] GUT: **405/405** tests passing (added 43 across catalog, store, service; total up from 362).
+
+### Known limitations
+- **Window Shopper and Chatty** ideas from the roadmap are deferred. Both require Profile to track `shops_visited` + `npcs_talked_to` and need hooks on NPC dialog open / shop entry that don't exist yet. Easy to add later.
+- **No achievement icons.** Each row uses a star/circle text glyph. Adding icon textures is a future polish pass.
+- **Toast doesn't slide horizontally** — just fades in/out. Modulate-alpha is the cheapest cross-headless animation; a real Tween on `offset_left` would land in 1.2.x.
+
+[1.2.0]: https://github.com/NickSanft/MallCross/releases/tag/v1.2.0
+
 ## [1.1.0] - 2026-05-27 — Phase 14: Settings menu completion
 
 First minor-version bump after the 1.0.x patch chain. Settings finally let the player tune everything that affects feel: input, audio mix, and key bindings.

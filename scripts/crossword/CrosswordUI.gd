@@ -16,7 +16,7 @@ extends Control
 #   - Hotkey overlay: `?` (KEY_QUESTION) toggles a translucent help card.
 
 signal closed
-signal puzzle_solved(elapsed_ms: int)
+signal puzzle_solved(elapsed_ms: int, used_check_letter: bool)
 
 # Per-cell delay for the solve sweep animation. 30ms × 225 cells (15x15) =
 # ~6.7s for FULL, ~270ms for MINI. Feels celebratory without being long.
@@ -34,6 +34,11 @@ var _solved_emitted: bool = false
 var _reward_amount: int = 0
 var _reward_already_taken: bool = false
 var _profile: Profile
+# Latches true the first time the player triggers _check_letter() in the
+# current puzzle. Resets to false on open_puzzle so each new puzzle starts
+# clean. Routed to puzzle_solved signal so the AchievementService can gate
+# the "Going It Alone" achievement.
+var _check_letter_used: bool = false
 var _check_letter_timer: SceneTreeTimer
 var _grid_view: CrosswordGridView
 var _title_label: Label
@@ -87,6 +92,7 @@ func open_puzzle(puzzle: Dictionary, existing_state: CrosswordState = null, rewa
 	_reward_already_taken = reward_already_taken
 	_profile = profile
 	_current_puzzle_id = puzzle_id
+	_check_letter_used = false
 	_clear_check_letter_flash()
 	# Hide the hotkey overlay if it was left up from a previous puzzle.
 	if _hotkey_overlay != null:
@@ -452,7 +458,7 @@ func _refresh_solved_banner() -> void:
 			# Start the sweep, then reveal the banner. Both run concurrently
 			# from here — the sweep awaits via `_play_solve_sweep`, the
 			# banner shows immediately so Enter/Space can dismiss any time.
-			puzzle_solved.emit(_elapsed_ms)
+			puzzle_solved.emit(_elapsed_ms, _check_letter_used)
 			_solved_banner.visible = true
 			_solved_continue_button.grab_focus()
 			_play_solve_sweep()
@@ -710,11 +716,13 @@ func _backspace() -> void:
 
 func _check_letter() -> void:
 	# Only available while the player owns Coffee. Flashes incorrect entries
-	# in the current word with a red border for 2 seconds.
+	# in the current word with a red border for 2 seconds. Also latches the
+	# "check used in current puzzle" flag for the no_checks achievement.
 	if _profile == null or not _profile.owns("coffee"):
 		return
 	if cursor == null:
 		return
+	_check_letter_used = true
 	var wrong_cells: Array = []
 	for cell_pos in cursor.current_word_cells():
 		var r: int = int(cell_pos["row"])
