@@ -42,8 +42,17 @@ func _init() -> void:
 		quit(2)
 		return
 
-	# Larger grids need a larger backtrack budget — 63-slot 15x15 puzzles
+	# Larger grids need a larger backtrack budget — 78-slot 15x15 puzzles
 	# can easily exceed the 50k default. Scale by pattern.
+	#
+	# FULL: kept at 500k. v1.0.4 investigation found that the FULL pattern
+	# + our generator's MRV heuristic hits a hard wall on most seeds —
+	# only specific lucky seeds (e.g. 1) find a fill in reasonable time;
+	# bumping to 5 million didn't materially help (still 0/16 seeds in
+	# a 60s timeout sweep). Generating more FULL puzzles requires either
+	# (a) a smarter solver (lookahead, restart heuristics) or (b) a
+	# different FULL block pattern with more flexibility — see
+	# https://github.com/NickSanft/MallCross/issues for tracker.
 	var budget: int = PuzzleGenerator.DEFAULT_BACKTRACK_BUDGET
 	match pattern_name.to_lower():
 		"full":

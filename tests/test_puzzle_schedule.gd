@@ -102,12 +102,25 @@ func test_full_day_one_has_puzzle() -> void:
 	assert_eq(PuzzleSchedule.puzzle_id_for_day(1, PuzzleSchedule.DIFFICULTY_FULL), "mall_full_day_one")
 
 
-func test_full_day_two_returns_empty() -> void:
-	assert_eq(PuzzleSchedule.puzzle_id_for_day(2, PuzzleSchedule.DIFFICULTY_FULL), "")
+func test_full_day_two_returns_full_day_two_now() -> void:
+	# v1.0.4 extended FULL to 7 days. Asserts the new schedule shape.
+	assert_eq(PuzzleSchedule.puzzle_id_for_day(2, PuzzleSchedule.DIFFICULTY_FULL), "mall_full_day_two")
+
+
+func test_full_beyond_schedule_returns_empty() -> void:
+	var beyond: int = PuzzleSchedule.last_scheduled_day(PuzzleSchedule.DIFFICULTY_FULL) + 1
+	assert_eq(PuzzleSchedule.puzzle_id_for_day(beyond, PuzzleSchedule.DIFFICULTY_FULL), "")
 
 
 func test_full_last_scheduled_day() -> void:
-	assert_eq(PuzzleSchedule.last_scheduled_day(PuzzleSchedule.DIFFICULTY_FULL), 1)
+	assert_eq(PuzzleSchedule.last_scheduled_day(PuzzleSchedule.DIFFICULTY_FULL), 7)
+
+
+func test_full_all_seven_days_distinct() -> void:
+	var ids: Dictionary = {}
+	for day in PuzzleSchedule.scheduled_days(PuzzleSchedule.DIFFICULTY_FULL):
+		ids[PuzzleSchedule.puzzle_id_for_day(day, PuzzleSchedule.DIFFICULTY_FULL)] = true
+	assert_eq(ids.size(), PuzzleSchedule.scheduled_days(PuzzleSchedule.DIFFICULTY_FULL).size())
 
 
 # ---- cross-difficulty ----

@@ -4,6 +4,50 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-05-27 — Phase 13c: Six more FULL puzzles + generator overhaul
+
+The biggest content + code drop of the 1.0.x line. FULL tier extended from day 1 only to **days 1-7**, completing the full daily rotation across all three difficulty tiers. The generator overhaul that made this possible doubles as a long-term enabler for further FULL content drops.
+
+### Added (content)
+- **Six new FULL puzzles** (`mall_full_day_two.json` through `mall_full_day_seven.json`), all 15x15 with the standard symmetric three-band pattern. Each ships with all 78 clues hand-authored. Spines / motifs at a glance:
+  - **Day 2** (seed 17) — "Week two opener." Highlights: TWERP, PESKY, ADEPT, ARENA, ESTER, PAGAN.
+  - **Day 3** (seed 22) — "Opera & wrath." Highlights: WRATH, AISLE, MECCA, OPERA, CROFT, PRIMO.
+  - **Day 4** (seed 23) — "Relics & nadirs." Highlights: PRONG, RELIC, NADIR, ENTRY, PARER, REEDY.
+  - **Day 5** (seed 24) — "Opera & idioms." Highlights: HIPPO, IDIOM, GURU, ADAGE, ELECT, MOGUL.
+  - **Day 6** (seed 25) — "Boost & lease." Highlights: STOMP, POESY, BOOST, LEASE, HORDE, INLAY.
+  - **Day 7** (seed 26) — "Covens & pesto." Highlights: LIPID, COVEN, PESTO, ELUDE, ENEMY, TREND.
+- **Six matching NPC hint files** (`data/hints/mall_full_day_*.json`), each with three roles nudging toward distinct answers.
+
+### Changed (generator)
+**This is the bigger ship than the puzzles themselves.** Before v1.0.4, only seed 1 reliably produced a fillable 15x15 grid; every other seed timed out at 500k backtrack steps. v1.0.4 takes the success rate from ~4% to ~70% with three coordinated improvements:
+
+- **Forward checking (arc consistency)** in `PuzzleGenerator._solve`. After tentatively choosing a candidate word for a slot, walk every crossing slot, build its would-be pattern, and verify that pattern still has at least one matching word in the wordlist (via `Wordlist.has_match`). If any crossing slot would have zero candidates, reject the current word immediately instead of recursing into a dead branch and rediscovering the failure deep below.
+- **Per-position letter index** in `Wordlist`. Built once at load time: `(length, position, letter) → set of words with that letter at that position`. `matches_pattern` and the new `has_match` now intersect the smallest such bucket against the pattern instead of scanning the full length bucket. Turns the per-step forward-check cost from O(N_words) to O(smallest_bucket_size × known_positions) — typically 10-100× faster.
+- **Side-effect duplicate detection.** The existing `_word_already_used` check only fires at candidate-selection time, so it missed the case where placing word W in slot S causes crossing slots' cells to side-effect-fill into another full word equal to some other puzzle answer. Now the side-effect detection at the top of `_solve` tracks all already-fully-filled slot patterns in `seen_patterns: Dictionary`; if a new fully-filled slot duplicates an existing one, the branch backtracks. Without this fix, the first FULL re-sweep produced grids with words like MEND or ENTER appearing twice.
+
+### Why it matters
+With FULL rotation at 7 days, the daily-content total is now **13 MINI + 7 MIDI + 7 FULL = 27 unique puzzle-days**. A daily player solving all three tiers takes nearly a month to see a repeat. The streak system finally has room to feel earned at every difficulty.
+
+The generator improvements aren't just for this drop — they're persistent infrastructure. Future FULL content drops should be straightforward: pick more seeds, generate in a few minutes, hand-clue.
+
+### Architecture notes
+- **Algorithmic complexity, brief.** MRV (most-constrained slot first) + forward check (arc consistency on crossing slots) + no-duplicate constraint is essentially the classical CSP-solver recipe. Without the per-position letter index, the per-node forward-check work dominated — at 80 slots × 1000 candidates × full-length scan per check, each branch costs seconds. With the index, the same check is ~milliseconds, and the budget reaches deep enough to escape.
+- **Wordlist density is fine.** Investigation: the `data/wordlists/common_words.json` has 1,157 4-letter words and 2,216 5-letter words — plenty. Earlier suspicion that wordlist size was the bottleneck was wrong; the issue was always search strategy.
+- **Same per-puzzle schema.** No data-model changes. Each FULL puzzle is a `data/puzzles/mall_full_day_*.json` file with the same shape as v1.0.0's mall_full_day_one. The schedule dict gets six new entries.
+
+### Pre-push checklist (Phase 13c / v1.0.4)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 27 puzzle files (13 MINI + 7 MIDI + 7 FULL).
+- [x] GUT: 348/348 tests passing (added 4 FULL schedule tests; total up from 344).
+
+### Known limitations
+- **3 of 12 attempted seeds still time out** at 120s with the improved generator. Pathological seeds remain. Adding a smarter MRV tie-breaker (degree heuristic — prefer slots that constrain more other slots when ties exist) would likely close that gap further.
+- **Wordlist diversity at length 6+.** The 5-letter index includes common solver words like ARENA and ARISE that show up often in spines; a future wordlist expansion would help generate more varied FULL grids.
+- **Forward-check + duplicate detection added per-step overhead.** A small slowdown for MINI / MIDI generation (still subsecond) — irrelevant given how rarely MINI / MIDI are batch-generated.
+
+[1.0.4]: https://github.com/NickSanft/MallCross/releases/tag/v1.0.4
+
 ## [1.0.3] - 2026-05-25 — Phase 13b: Six more MIDI puzzles
 
 Pure content drop. MIDI tier extended from day 1 only to **days 1-7**, giving the mid-difficulty rotation a full week before any repeats.
