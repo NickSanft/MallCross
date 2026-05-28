@@ -4,6 +4,71 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-05-28 — Phase 17.3: Functional furniture
+
+Third and final sub-ship of the apartment customization arc. The three appliance items finally **do something**: the coffee maker brews a daily +20% bonus, the jukebox plays procedural muzak, the desk lamp emits a warm light. Posters stay cosmetic.
+
+### Added
+- **Coffee Maker mechanics.** Walk up to a placed coffee maker → `[E] Brew coffee (+20% Woints on your next solve today)` prompt. Press E → brewed. The next first-solve on the same day pays **+20% on (reward + streak bonus)**, rounded up. The bonus is consumed by the first solve; sleeping without solving lets the brew go stale (`has_pending_coffee_bonus` checks `coffee_brewed_day == current_day`). Brewing is idempotent on the same day so the player can mash E without spamming saves.
+  - New `Profile.coffee_brewed_day` field, defaults to `-1`. Round-trips via `to_dict` / `from_dict`. Pre-v1.4.2 saves load as `-1` (no pending bonus) — no schema version bump needed.
+  - `Profile.brew_coffee()`, `has_pending_coffee_bonus()`, `consume_coffee_bonus()` helpers.
+  - `Profile.COFFEE_BONUS_RATE = 0.20` pinned in code with a regression test.
+  - `GameController._apply_coffee_bonus(base_reward)` wraps both the community-puzzle flat-rate and the daily-puzzle reward+bonus paths. Single call site, single consumption point.
+  - Coffee maker is added to `Player.INTERACTION_GROUP` with `coffee_maker_brew: true` metadata at spawn time. Existing interaction-prompt routing in `GameController._on_interactable_changed` dispatches on the new metadata.
+- **Desk Lamp light.** Placed desk lamp visuals now carry a child `OmniLight3D`: warm color (`#FFEABF`), `light_energy = 0.80`, `omni_range = 3.5`. Constant for now; Phase 20's day/night cycle will modulate energy so the lamp visibly turns on at night.
+- **Jukebox muzak.** Placed jukebox visuals carry a child `AudioStreamPlayer3D` configured as:
+  - Stream: `JukeboxAudio.make_stream(track_index)` — see below.
+  - Bus: `Music` (the bus we wired in v1.1.0). The Music volume slider already controls it.
+  - Distance attenuation: `unit_size = 1.5`, `max_distance = 12.0`. Audible inside the apartment zone (~4 m), fades to silence by the corridor mouth (~10 m).
+  - Track index derives from `abs(hash(str(visual.position))) % 3` so the same placement always plays the same loop, but a remove-and-replace gets a different track.
+- **`scripts/JukeboxAudio.gd`** — procedural muzak generator. Builds a stacked-sine-wave triad over a slow chord progression with a 1.5 Hz tremolo LFO. Three tracks shipped (C-Am-F-G / Dm-G-C-F / Em-Am-Dm-G). Each ~8 seconds, loops seamlessly via segment-boundary envelopes that fade samples in/out at chord changes to avoid clicks. 16-bit mono, 22.05 kHz mix rate — same approach as `FootstepAudio`, no binary asset shipped.
+- **`MallGreybox._attach_furniture_behavior(visual, item)`** dispatches on `item.id` for behavior wiring. Adding a new functional item is a single new match arm + the corresponding `_attach_*` helper. Posters fall through the `_` arm and stay cosmetic.
+- **+17 tests** across `test_profile.gd` (10 new for coffee state + bonus rate + v2 migration) and `test_jukebox_audio.gd` (7 new for stream shape + track distinctness + amplitude clamp).
+
+### Changed
+- **`GameController._on_puzzle_solved`** routes both reward paths through `_apply_coffee_bonus()`. Single call site for the multiplication + consumption.
+- **`GameController` interactable routing** gains a `coffee_maker_brew` branch in `_on_interactable_changed` (prompt) and `_on_interaction_triggered` (action). The prompt switches between "Brew coffee..." and "Coffee brewed — +20% on your next solve" based on `has_pending_coffee_bonus`.
+- **`MallGreybox._make_furniture_visual`** now calls `_attach_furniture_behavior` at the end so spawned items get their behavior wired automatically. Same path runs on first spawn AND on the reconcile-after-placement flow.
+- **`project.godot`** version bumped to `1.4.2`.
+
+### Flow examples
+
+**Coffee bonus:**
+1. Buy a coffee maker at Home Goods (150 W).
+2. Place it on the apartment desk.
+3. Walk up to it next day → `[E] Brew coffee...`. Press E.
+4. Walk to a food court table, solve the puzzle. Woints award includes `+20%` on top of the base + streak. Bonus consumed.
+5. Solve another puzzle the same day → normal rate. Bonus already used.
+6. Sleep → next day → unused brew (if any) gone, can brew again.
+
+**Jukebox vibes:**
+1. Buy + place the jukebox.
+2. Stand in the apartment zone → muzak audible.
+3. Walk to the corridor → fades to silence by ~10 m.
+4. Settings menu → Music volume slider lets you mute it independently of SFX.
+
+### Architecture
+- **One dispatch per item id.** `_attach_furniture_behavior` is the only place that maps `item.id` to runtime behavior. Posters auto-fall-through to no-op without an explicit case. Future items added in 18+ slot in here with one match arm + one helper.
+- **Behavior nodes are children of the visual.** The OmniLight3D, AudioStreamPlayer3D, and interaction-group tag all live on the same StaticBody3D that represents the placed item. Removing the item frees the whole subtree, so behavior cleanup is free.
+- **Single consumption point for the coffee bonus.** `_apply_coffee_bonus` is called once per `_on_puzzle_solved`. Consumes the brew via `consume_coffee_bonus()` only when a bonus was actually applied. No double-fire on a re-solve that doesn't earn Woints.
+- **Stale brew via current_day comparison.** `has_pending_coffee_bonus` doesn't need a "stale" flag — the brewed_day comparison naturally invalidates an unused brew the moment the day advances.
+- **Procedural muzak parity.** `JukeboxAudio` mirrors the design of `FootstepAudio` (same mix rate, same 16-bit format, no binary asset). The mix rate is intentionally low (22 kHz) to match the PS1 aesthetic — telephone-quality audio feels right for the mall.
+
+### Pre-push checklist (Phase 17.3 / v1.4.2)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 21 bundled puzzles (unchanged).
+- [x] GUT: **466/466** tests passing (added 17; up from 449).
+
+### Known limitations
+- **Coffee bonus is per-day, not per-brew.** A second coffee maker on the same desk doesn't give you a second bonus — `coffee_brewed_day` is global, not per-instance. Multi-brew might land later if anyone asks.
+- **Desk lamp is always-on.** Phase 20 wires the day/night cycle and the lamp will switch on at dusk. For now the warm glow is visible 24/7.
+- **Jukebox doesn't pause when the player is solving a crossword.** The modal dim covers the visuals but the muzak keeps playing. Trivial to gate on `_crossword_ui.visible` if it annoys anyone.
+- **Three muzak tracks isn't a lot.** Procedural generation lets us add more cheaply — the bottleneck is composing pleasant chord progressions.
+
+[1.4.2]: https://github.com/NickSanft/MallCross/releases/tag/v1.4.2
+
 ## [1.4.1] - 2026-05-28 — Phase 17.2: Apartment customization (placement)
 
 Second sub-ship of the apartment-customization arc. The furniture you bought in v1.4.0 now **appears in the world**: walk to the new apartment kiosk, open the edit menu, click Place, raycast a ghost-preview around to find a valid surface, press E to drop it.

@@ -601,3 +601,86 @@ func test_from_dict_drops_malformed_placed_entries() -> void:
 	assert_false(restored.is_furniture_placed("bad_no_pos"))
 	assert_false(restored.is_furniture_placed("bad_pos_len"))
 	assert_false(restored.is_furniture_placed(""))
+
+
+# ----- coffee maker brew bonus (v1.4.2) ------------------------------
+
+func test_fresh_profile_has_no_pending_coffee_bonus() -> void:
+	var p: Profile = Profile.new()
+	assert_false(p.has_pending_coffee_bonus())
+
+
+func test_brew_coffee_sets_pending_bonus() -> void:
+	var p: Profile = Profile.new()
+	p.current_day = 5
+	assert_true(p.brew_coffee())
+	assert_true(p.has_pending_coffee_bonus())
+	assert_eq(p.coffee_brewed_day, 5)
+
+
+func test_brew_coffee_idempotent_same_day() -> void:
+	# Re-brewing on the same day is a no-op so the GameController doesn't
+	# spam "saved" feedback when the player mashes E on the coffee maker.
+	var p: Profile = Profile.new()
+	p.current_day = 5
+	assert_true(p.brew_coffee())
+	assert_false(p.brew_coffee())
+
+
+func test_brew_coffee_re_brews_on_new_day() -> void:
+	var p: Profile = Profile.new()
+	p.current_day = 5
+	p.brew_coffee()
+	p.advance_day()  # 6
+	assert_true(p.brew_coffee())
+	assert_eq(p.coffee_brewed_day, 6)
+
+
+func test_consume_coffee_bonus_clears_pending_state() -> void:
+	var p: Profile = Profile.new()
+	p.current_day = 5
+	p.brew_coffee()
+	assert_true(p.consume_coffee_bonus())
+	assert_false(p.has_pending_coffee_bonus())
+
+
+func test_consume_coffee_bonus_returns_false_when_clean() -> void:
+	var p: Profile = Profile.new()
+	assert_false(p.consume_coffee_bonus())
+
+
+func test_day_advance_invalidates_unused_brew() -> void:
+	# Player brews on day 5 but goes straight to sleep without solving;
+	# brew goes stale and the bonus is gone on day 6.
+	var p: Profile = Profile.new()
+	p.current_day = 5
+	p.brew_coffee()
+	assert_true(p.has_pending_coffee_bonus())
+	p.advance_day()  # 6
+	assert_false(p.has_pending_coffee_bonus())
+
+
+func test_coffee_state_round_trips_via_dict() -> void:
+	var p: Profile = Profile.new()
+	p.current_day = 3
+	p.brew_coffee()
+	var restored: Profile = Profile.from_dict(p.to_dict())
+	assert_eq(restored.coffee_brewed_day, 3)
+	# has_pending_coffee_bonus is computed against current_day; restoring
+	# preserves both fields so the bonus is still pending.
+	assert_true(restored.has_pending_coffee_bonus())
+
+
+func test_v2_profile_loads_with_no_pending_coffee() -> void:
+	# Saves predating v1.4.2 don't have the coffee_brewed_day key.
+	# Loading them should fall through to the -1 default (no bonus).
+	var v2_payload: Dictionary = {"version": 2, "woints": 0}
+	var restored: Profile = Profile.from_dict(v2_payload)
+	assert_eq(restored.coffee_brewed_day, -1)
+	assert_false(restored.has_pending_coffee_bonus())
+
+
+func test_coffee_bonus_rate_is_twenty_percent() -> void:
+	# Pinned in code so we don't accidentally tweak the design without a
+	# matching changelog entry.
+	assert_eq(Profile.COFFEE_BONUS_RATE, 0.20)

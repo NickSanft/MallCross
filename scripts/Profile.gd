@@ -35,6 +35,13 @@ var best_times: Dictionary = {}
 # owned_items (you can only place what you bought). The complement —
 # owned but not placed — is reachable via owned_items minus the keys here.
 var placed_furniture: Dictionary = {}
+# Day on which the placed coffee maker was last brewed. -1 = no pending
+# bonus. The bonus is consumed at the next solve via consume_coffee_bonus.
+# Naturally goes stale on day advance — has_pending_coffee_bonus checks
+# `coffee_brewed_day == current_day`, so the brew expires if the player
+# sleeps without solving anything. Introduced in v1.4.2; loads as -1 for
+# any save without the field.
+var coffee_brewed_day: int = -1
 
 # puzzle_id -> CrosswordState (in-memory). Serialized via CrosswordSerializer
 # at to_dict() time so we keep one source of truth for the on-disk shape.
@@ -228,6 +235,37 @@ func placed_furniture_ids() -> Array:
 	return ids
 
 
+# --- coffee maker bonus (v1.4.2) -------------------------------------
+
+func brew_coffee() -> bool:
+	# Records that the player has brewed today's coffee. Returns true iff
+	# the brew state actually changed (idempotent on the same day). Day
+	# advance naturally invalidates an unused brew via has_pending_coffee_bonus.
+	if coffee_brewed_day == current_day:
+		return false
+	coffee_brewed_day = current_day
+	return true
+
+
+func has_pending_coffee_bonus() -> bool:
+	return coffee_brewed_day == current_day
+
+
+func consume_coffee_bonus() -> bool:
+	# Called by the solve handler after applying the bonus. Set to -1 so a
+	# second solve on the same day doesn't compound. Returns true iff a
+	# bonus was actually consumed (false on a clean call).
+	if not has_pending_coffee_bonus():
+		return false
+	coffee_brewed_day = -1
+	return true
+
+
+# Bonus rate applied to Woints reward + streak bonus on the next solve
+# after brewing. 20% per the design spec.
+const COFFEE_BONUS_RATE: float = 0.20
+
+
 static func _entries_equal(a: Dictionary, b: Dictionary) -> bool:
 	# Cheap structural comparison for two placement entries.
 	if not a.has("rotation") or not b.has("rotation"):
@@ -276,6 +314,7 @@ func to_dict() -> Dictionary:
 		"puzzle_states": states_payload,
 		"best_times": best_times.duplicate(),
 		"placed_furniture": placed_furniture.duplicate(true),
+		"coffee_brewed_day": coffee_brewed_day,
 	}
 
 
@@ -307,6 +346,10 @@ static func from_dict(payload: Dictionary) -> Profile:
 			var ms: int = int(raw_best[id])
 			if ms > 0:
 				profile.best_times[id] = ms
+	# coffee_brewed_day: additive field added in v1.4.2. Missing key -> -1
+	# (no brew pending). Negative values are accepted as-is so the sentinel
+	# survives a round-trip.
+	profile.coffee_brewed_day = int(payload.get("coffee_brewed_day", -1))
 	# placed_furniture: v3+ field. v1/v2 saves don't have it; loaded as empty.
 	# Each entry must have a 3-float "position" array and a numeric
 	# "rotation". Malformed entries are dropped, NOT silently fixed up —

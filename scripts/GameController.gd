@@ -261,6 +261,8 @@ func _on_interactable_changed(interactable: Node) -> void:
 		_hud.show_prompt("[E] Browse community puzzles")
 	elif interactable.has_meta("edit_apartment"):
 		_hud.show_prompt("[E] " + interactable.get_meta("apartment_label", "Customize apartment"))
+	elif interactable.has_meta("coffee_maker_brew"):
+		_show_coffee_maker_prompt()
 	elif interactable.has_meta("shop_id"):
 		_hud.show_prompt("[E] " + interactable.get_meta("shop_label", "Shop"))
 	elif interactable.has_meta("sleep_action"):
@@ -287,6 +289,23 @@ func _show_daily_puzzle_prompt() -> void:
 		_hud.show_prompt("[E] %s Day %d (already solved%s)" % [label, day, _best_time_suffix(puzzle_id)])
 	else:
 		_hud.show_prompt("[E] Solve %s Day %d%s" % [label, day, _best_time_suffix(puzzle_id)])
+
+
+func _show_coffee_maker_prompt() -> void:
+	if _profile.has_pending_coffee_bonus():
+		_hud.show_prompt("Coffee brewed — +20%% on your next solve")
+	else:
+		_hud.show_prompt("[E] Brew coffee (+20%% Woints on your next solve today)")
+
+
+func _on_coffee_maker_interact() -> void:
+	# Single press, no menu. Brewing is a no-op if already brewed today,
+	# but we still refresh the prompt so the player sees the updated state
+	# without walking away and back.
+	var changed: bool = _profile.brew_coffee()
+	if changed:
+		ProfileStore.save_to_path(_profile)
+	_show_coffee_maker_prompt()
 
 
 func _best_time_suffix(puzzle_id: String) -> String:
@@ -330,6 +349,8 @@ func _on_interaction_triggered(interactable: Node) -> void:
 		_open_community_picker()
 	elif interactable.has_meta("edit_apartment"):
 		_open_apartment_menu()
+	elif interactable.has_meta("coffee_maker_brew"):
+		_on_coffee_maker_interact()
 	elif interactable.has_meta("shop_id"):
 		_open_shop(interactable)
 	elif interactable.has_meta("sleep_action"):
@@ -544,10 +565,10 @@ func _on_puzzle_solved(elapsed_ms: int, used_check_letter: bool) -> void:
 	if first_solve:
 		if is_community:
 			# Flat reward, no streak bonus.
-			_profile.add_woints(_current_reward)
+			_profile.add_woints(_apply_coffee_bonus(_current_reward))
 		else:
 			var bonus: int = WointsConfig.streak_bonus(_profile.streak)
-			_profile.add_woints(_current_reward + bonus)
+			_profile.add_woints(_apply_coffee_bonus(_current_reward + bonus))
 		_refresh_hud()
 	ProfileStore.save_to_path(_profile)
 	# Achievement notifications fire whether or not it's a first solve — a
@@ -566,6 +587,18 @@ func _on_puzzle_solved(elapsed_ms: int, used_check_letter: bool) -> void:
 	_push_unlocks(fired_streak)
 	var fired_hoard: Array = _achievements.notify_woints(_profile.woints, _profile.current_day)
 	_push_unlocks(fired_hoard)
+
+
+func _apply_coffee_bonus(base_reward: int) -> int:
+	# v1.4.2 Phase 17.3 — if the placed coffee maker was brewed earlier
+	# today and the bonus is still pending, multiply the reward by
+	# (1 + COFFEE_BONUS_RATE) and consume the bonus so subsequent solves
+	# on the same day pay normal rate.
+	if base_reward <= 0 or not _profile.has_pending_coffee_bonus():
+		return base_reward
+	var boosted: int = int(ceil(float(base_reward) * (1.0 + Profile.COFFEE_BONUS_RATE)))
+	_profile.consume_coffee_bonus()
+	return boosted
 
 
 static func _is_community_puzzle_id(puzzle_id: String) -> bool:

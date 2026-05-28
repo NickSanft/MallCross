@@ -387,8 +387,8 @@ func spawn_placed_furniture(profile: Profile) -> void:
 func _make_furniture_visual(item: Item, pos: Vector3, yaw: float) -> Node3D:
 	# Programmatic box per item, sized by anchor so wall items stay flat,
 	# floor items are tall, desk items are small. Color comes from the
-	# catalog. Future Phase 17.3 / Phase 18+ replace these with real
-	# mesh assets per item id.
+	# catalog. Future Phase 18+ replaces these with real mesh assets per
+	# item id.
 	var size: Vector3 = _visual_size_for_anchor(item.anchor)
 	# Render through the existing PS1 material so the placed furniture
 	# matches the mall's aesthetic out of the box.
@@ -398,7 +398,71 @@ func _make_furniture_visual(item: Item, pos: Vector3, yaw: float) -> Node3D:
 	# Group used by PlacementController to detect "this is already placed
 	# furniture, don't snap to it" in future rotation/move support.
 	node.add_to_group("placed_furniture")
+	# v1.4.2 Phase 17.3 — functional behaviors attached as children of
+	# the visual node. Each item id wires its own behavior:
+	_attach_furniture_behavior(node, item)
 	return node
+
+
+func _attach_furniture_behavior(visual: StaticBody3D, item: Item) -> void:
+	# Dispatch on item.id so the data layer (ItemCatalog entries) stays
+	# behavior-agnostic. Adding a new behavior in 17.x is a single new
+	# match arm here plus the catalog entry.
+	match item.id:
+		"coffee_maker":
+			_make_coffee_maker_interactable(visual)
+		"desk_lamp":
+			_attach_lamp_light(visual)
+		"jukebox":
+			_attach_jukebox_audio(visual)
+		_:
+			# Posters and any other future cosmetic-only furniture have
+			# no behavior — purely visual. No-op intentionally.
+			pass
+
+
+func _make_coffee_maker_interactable(visual: StaticBody3D) -> void:
+	# Tag the visual itself as an interactable. GameController dispatches
+	# on `coffee_maker_brew` to call Profile.brew_coffee.
+	visual.add_to_group(Player.INTERACTION_GROUP)
+	visual.set_meta("coffee_maker_brew", true)
+
+
+func _attach_lamp_light(visual: StaticBody3D) -> void:
+	# Small warm OmniLight3D centered above the lamp base. Energy is
+	# constant for now; Phase 20 (day/night cycle) will modulate it so
+	# the lamp visibly turns on at night. The light range is short
+	# enough not to wash out the food court's existing mall lighting.
+	var light: OmniLight3D = OmniLight3D.new()
+	light.name = "LampLight"
+	light.position = Vector3(0.0, 0.30, 0.0)
+	light.light_color = Color(1.0, 0.92, 0.75)
+	light.light_energy = 0.80
+	light.omni_range = 3.5
+	visual.add_child(light)
+
+
+func _attach_jukebox_audio(visual: StaticBody3D) -> void:
+	# Generate a procedural muzak loop and attach it as an
+	# AudioStreamPlayer3D. Routed through the Music bus we wired in
+	# v1.1.0, so the existing Music volume slider already controls it.
+	# Distance attenuation via unit_size + max_distance limits hearing
+	# range so the muzak doesn't carry across the entire mall.
+	var player: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+	player.name = "JukeboxPlayer"
+	# Procedural track index chosen from the placed jukebox's position
+	# hash so the same placement always plays the same loop, but
+	# different placements (or a remove-and-replace) can sound different.
+	var track_index: int = abs(hash(str(visual.position))) % JukeboxAudio.track_count()
+	player.stream = JukeboxAudio.make_stream(track_index)
+	player.bus = "Music"
+	player.autoplay = true
+	# Tuned so the muzak is audible inside the apartment zone (~4 m) but
+	# fades to silence at corridor distance (~10 m).
+	player.unit_size = 1.5
+	player.max_distance = 12.0
+	player.position = Vector3(0.0, 0.6, 0.0)
+	visual.add_child(player)
 
 
 static func _visual_size_for_anchor(anchor: String) -> Vector3:
