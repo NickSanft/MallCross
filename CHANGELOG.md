@@ -4,6 +4,55 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-28 — Phase 17.1: Home Goods shop + furniture catalog
+
+First sub-ship of the apartment-customization arc. Pure data + shop layer — buying works, **placement and functional effects land in 17.2 / 17.3 (v1.4.1 / v1.4.2)**. Stop here and you have a second mall shop full of items that show up as `owned_items` in the profile but don't do anything visible yet.
+
+### Added
+- **`Item` model extended** with four new fields:
+  - `shop_id` (default `mall_general`) — which shop sells this item.
+  - `category` — coarse grouping for future organization (poster / lighting / appliance).
+  - `anchor` — `floor` / `wall` / `desk` / `""`. Tells the 17.2 placement UI which surfaces this item snaps to. Non-furniture items keep `ANCHOR_NONE` ("").
+  - `color: Color` — display color used by the shop preview and the future placement ghost. Accepts raw `Color`, an `[r, g, b]` array, or a `#hex` string.
+  - `Item.is_placeable()` returns true iff `anchor != ANCHOR_NONE`.
+  - New `SLOT_FURNITURE` constant alongside the existing `SLOT_COSMETIC` / `SLOT_FUNCTIONAL`.
+- **`SHOP_MALL_GENERAL` / `SHOP_HOME_GOODS`** ID constants on `Item`. Story-shaped (any string works), but keeps every caller honest about what's wired.
+- **Home Goods catalog**: 9 furniture items in `ItemCatalog.all_items()`:
+  - **6 posters** at 50 Woints each (Geometric, Mountain Landscape, B-Movie, Band Tour, Hang In There Cat, Abstract) — wall anchor.
+  - **Desk Lamp** at 80 Woints — desk anchor.
+  - **Coffee Maker** at 150 Woints — desk anchor.
+  - **Mini Jukebox** at 200 Woints — floor anchor.
+- **`ItemCatalog.items_for_shop(shop_id)`** — filtered access used by `ShopUI`. The existing `all_items()` stays as the canonical full list.
+- **`MallGreybox` wires Store 2** as the `home_goods` shop (Store 1 stays `mall_general`). Stores 3-6 remain decorative facades.
+- **Per-shop title strings**. Store 1 now reads "Mall General Store"; Store 2 reads "Home Goods". Falls back to "Enter Store N" for unmapped stores.
+
+### Changed
+- **`ShopUI.open_shop(profile, shop_title, shop_id)`** — new third arg, defaults to `mall_general` so the only existing caller keeps working. The shop's item list now comes from `items_for_shop(shop_id)` instead of `all_items()`.
+- **`ShopUI._build_item_row`** displays a `(furniture)` slot marker for items with `SLOT_FURNITURE`. Empty-shop case renders a "(No items in this shop yet.)" hint rather than nothing.
+- **`GameController._open_shop`** reads the `shop_id` metadata off the interactable and passes it to `ShopUI.open_shop`. Existing perks shop unchanged because its metadata already contained `shop_id`.
+- **`project.godot`** version bumped to `1.4.0`.
+
+### Why it matters
+The mall now has more than one shop, which is the first thing that lets the player feel like they're navigating an actual building rather than a one-room arcade. Even without placement working yet, the player can spend Woints on 9 new items and the achievement Hoarder/Big Spender hooks all fire on Home Goods purchases too (the `notify_item_purchased` path is shop-agnostic).
+
+### Architecture
+- **One catalog, multiple shops.** Reusing `ItemCatalog` with a `shop_id` field beats forking into `ItemCatalog` + `FurnitureCatalog` — same `Item` model, same `Profile.owned_items` storage, same purchase + achievement plumbing. The shop filter is one `if item.shop_id == shop_id` comparison per row.
+- **Defensive color parsing.** `Item.from_dict` accepts three different color shapes so test fixtures and JSON catalog entries stay readable. Existing perks (no `color` field in their dicts) default to black, which the ShopUI doesn't render anywhere.
+- **Backward-compat defaults everywhere.** Item without `shop_id` -> `mall_general`. Item without `anchor` -> `ANCHOR_NONE` -> `is_placeable() = false`. ShopUI without `shop_id` arg -> `mall_general`. Nothing in v1.3.x save files or call sites breaks.
+
+### Pre-push checklist (Phase 17.1 / v1.4.0)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 21 bundled puzzles (unchanged).
+- [x] GUT: **437/437** tests passing (added 19 across Item + ItemCatalog; total up from 418).
+
+### Known limitations
+- **Furniture doesn't appear in the world yet.** Purchases populate `Profile.owned_items` but no MeshInstance3D is spawned. That's Phase 17.2 (v1.4.1).
+- **Coffee Maker / Jukebox have no functional effect yet.** Owning them is currently flavor-only. Phase 17.3 (v1.4.2) wires the actual mechanics.
+- **No apartment area.** Today's "apartment" is the sleep cushion in the food court. A dedicated apartment scene (or carved-out back room) lands as part of Phase 17.2.
+
+[1.4.0]: https://github.com/NickSanft/MallCross/releases/tag/v1.4.0
+
 ## [1.3.0] - 2026-05-27 — Phase 16: Community puzzle table
 
 Players can drop `.json` puzzle files into `user://puzzles/` and they appear on a new **COMMUNITY** food-court table the next time you walk up to it. Tiny code, big replay value.

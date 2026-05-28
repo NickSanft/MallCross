@@ -186,9 +186,19 @@ func _build_corridor_endcap() -> void:
 func _build_store_fronts() -> void:
 	var z_positions: Array[float] = MallLayoutMath.store_z_positions(STORE_COUNT_PER_SIDE, STORE_WIDTH, STORE_GAP)
 	var sides: Array[int] = [-1, 1]
-	# Phase 6: only Store 1 is wired as an interactable shop. The others are
-	# decorative facades until Phase 7+ adds themed shops.
-	var shop_ids_by_store_number: Dictionary = {1: "mall_general"}
+	# Phase 6: Store 1 wired as mall_general (perks).
+	# Phase 17.1 (v1.4.0): Store 2 wired as home_goods (apartment furniture).
+	# Stores 3-6 stay decorative until future shop themes land.
+	var shop_ids_by_store_number: Dictionary = {
+		1: Item.SHOP_MALL_GENERAL,
+		2: Item.SHOP_HOME_GOODS,
+	}
+	# Friendly per-shop title strings shown in the ShopUI header. Falls back
+	# to "Enter Store N" for any store_number without an explicit entry.
+	var shop_titles_by_store_number: Dictionary = {
+		1: "Mall General Store",
+		2: "Home Goods",
+	}
 	var label_index: int = 0
 	for side in sides:
 		var x: float = MallLayoutMath.store_front_x(side, CORRIDOR_WIDTH, STORE_FRONT_THICKNESS)
@@ -201,7 +211,8 @@ func _build_store_fronts() -> void:
 			if shop_ids_by_store_number.has(store_number):
 				facade.add_to_group(Player.INTERACTION_GROUP)
 				facade.set_meta("shop_id", shop_ids_by_store_number[store_number])
-				facade.set_meta("shop_label", "Enter Store " + str(store_number))
+				var title: String = shop_titles_by_store_number.get(store_number, "Enter Store " + str(store_number))
+				facade.set_meta("shop_label", title)
 			add_child(facade)
 			_add_store_label(pos, side, str(store_number))
 			label_index += 1

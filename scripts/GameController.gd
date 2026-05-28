@@ -361,10 +361,11 @@ func _on_community_picker_closed() -> void:
 
 func _open_shop(interactable: Node) -> void:
 	var shop_label: String = interactable.get_meta("shop_label", "Mall Shop")
+	var shop_id: String = interactable.get_meta("shop_id", Item.SHOP_MALL_GENERAL)
 	# Snapshot owned_items so the close handler can diff to detect any new
 	# purchases. .duplicate() is shallow-fine; owned_items holds Strings.
 	_owned_items_before_shop = _profile.owned_items.duplicate()
-	_shop_ui.open_shop(_profile, shop_label)
+	_shop_ui.open_shop(_profile, shop_label, shop_id)
 	_player.set_paused_for_ui(true)
 	_hud.hide_prompt()
 

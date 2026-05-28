@@ -11,6 +11,9 @@ const ROW_HEIGHT: float = 80.0
 
 var _profile: Profile
 var _shop_title: String = "Mall Shop"
+# Filters the catalog. Defaults to the original perks shop so existing
+# call sites (the v1.0.x Store 1 mall_general wiring) keep working.
+var _shop_id: String = Item.SHOP_MALL_GENERAL
 
 var _title_label: Label
 var _woints_label: Label
@@ -24,9 +27,10 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 
-func open_shop(profile: Profile, shop_title: String = "Mall Shop") -> void:
+func open_shop(profile: Profile, shop_title: String = "Mall Shop", shop_id: String = Item.SHOP_MALL_GENERAL) -> void:
 	_profile = profile
 	_shop_title = shop_title
+	_shop_id = shop_id
 	visible = true
 	_refresh()
 	_close_button.grab_focus()
@@ -114,7 +118,14 @@ func _refresh() -> void:
 	_woints_label.text = "%d Woints" % _profile.woints
 	for child in _items_container.get_children():
 		child.queue_free()
-	for item in ItemCatalog.all_items():
+	var items: Array = ItemCatalog.items_for_shop(_shop_id)
+	if items.is_empty():
+		var empty_label: Label = Label.new()
+		empty_label.text = "(No items in this shop yet.)"
+		empty_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.65))
+		_items_container.add_child(empty_label)
+		return
+	for item in items:
 		_items_container.add_child(_build_item_row(item))
 
 
@@ -138,7 +149,14 @@ func _build_item_row(item: Item) -> Control:
 	row_hbox.add_child(info)
 
 	var name_line: Label = Label.new()
-	var slot_marker: String = "(cosmetic)" if item.slot == Item.SLOT_COSMETIC else "(functional)"
+	var slot_marker: String = ""
+	match item.slot:
+		Item.SLOT_COSMETIC:
+			slot_marker = "(cosmetic)"
+		Item.SLOT_FURNITURE:
+			slot_marker = "(furniture)"
+		_:
+			slot_marker = "(functional)"
 	name_line.text = "%s  %s" % [item.name, slot_marker]
 	name_line.add_theme_font_size_override("font_size", 18)
 	name_line.add_theme_color_override("font_color", Color(1.0, 0.95, 0.65))
