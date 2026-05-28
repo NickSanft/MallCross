@@ -492,7 +492,112 @@ func test_format_time_ms_renders_minutes_seconds() -> void:
 	assert_eq(Profile.format_time_ms(3661 * 1000), "1:01:01")
 
 
-func test_format_version_bumped_to_v2() -> void:
-	# Guard against an accidental version-number revert that would break the
-	# v1 → v2 migration tested above.
-	assert_eq(Profile.FORMAT_VERSION, 2)
+func test_format_version_is_current() -> void:
+	# Guard against an accidental version-number revert that would break
+	# the forward migrations tested above. Update the constant on every
+	# schema bump; v3 added placed_furniture (v1.4.1).
+	assert_eq(Profile.FORMAT_VERSION, 3)
+
+
+# ----- placed_furniture (introduced in FORMAT_VERSION 3 / v1.4.1) ------
+
+func test_place_furniture_first_time_returns_true() -> void:
+	var p: Profile = Profile.new()
+	assert_true(p.place_furniture("poster_geometric", Vector3(1, 2, 3), 45.0))
+	assert_true(p.is_furniture_placed("poster_geometric"))
+
+
+func test_place_furniture_same_pos_and_rot_returns_false() -> void:
+	# Idempotent: replacing at the same transform is a no-op so the
+	# GameController doesn't fire "saved" toasts on phantom updates.
+	var p: Profile = Profile.new()
+	p.place_furniture("poster_geometric", Vector3(1, 2, 3), 45.0)
+	assert_false(p.place_furniture("poster_geometric", Vector3(1, 2, 3), 45.0))
+
+
+func test_place_furniture_changed_pos_returns_true() -> void:
+	var p: Profile = Profile.new()
+	p.place_furniture("poster_geometric", Vector3(1, 2, 3), 0.0)
+	assert_true(p.place_furniture("poster_geometric", Vector3(4, 5, 6), 0.0))
+	assert_eq(p.furniture_position("poster_geometric"), Vector3(4, 5, 6))
+
+
+func test_place_furniture_changed_rotation_returns_true() -> void:
+	var p: Profile = Profile.new()
+	p.place_furniture("poster_geometric", Vector3(1, 2, 3), 0.0)
+	assert_true(p.place_furniture("poster_geometric", Vector3(1, 2, 3), 90.0))
+	assert_eq(p.furniture_rotation("poster_geometric"), 90.0)
+
+
+func test_place_furniture_rejects_empty_id() -> void:
+	var p: Profile = Profile.new()
+	assert_false(p.place_furniture("", Vector3.ZERO, 0.0))
+
+
+func test_unplace_furniture_returns_false_for_missing_id() -> void:
+	var p: Profile = Profile.new()
+	assert_false(p.unplace_furniture("not_placed"))
+
+
+func test_unplace_furniture_returns_true_after_place() -> void:
+	var p: Profile = Profile.new()
+	p.place_furniture("desk_lamp", Vector3.ZERO, 0.0)
+	assert_true(p.unplace_furniture("desk_lamp"))
+	assert_false(p.is_furniture_placed("desk_lamp"))
+
+
+func test_furniture_position_zero_for_unplaced() -> void:
+	var p: Profile = Profile.new()
+	assert_eq(p.furniture_position("nothing"), Vector3.ZERO)
+
+
+func test_placed_furniture_ids_sorted() -> void:
+	var p: Profile = Profile.new()
+	p.place_furniture("zeta", Vector3.ZERO, 0.0)
+	p.place_furniture("alpha", Vector3.ZERO, 0.0)
+	p.place_furniture("mu", Vector3.ZERO, 0.0)
+	assert_eq(p.placed_furniture_ids(), ["alpha", "mu", "zeta"])
+
+
+func test_placed_furniture_round_trips_via_dict() -> void:
+	var p: Profile = Profile.new()
+	p.place_furniture("poster_geometric", Vector3(1.5, 2.0, 3.0), 90.0)
+	p.place_furniture("desk_lamp", Vector3(-1.0, 0.78, 5.0), 180.0)
+	var restored: Profile = Profile.from_dict(p.to_dict())
+	assert_true(restored.is_furniture_placed("poster_geometric"))
+	assert_eq(restored.furniture_position("poster_geometric"), Vector3(1.5, 2.0, 3.0))
+	assert_eq(restored.furniture_rotation("poster_geometric"), 90.0)
+	assert_true(restored.is_furniture_placed("desk_lamp"))
+	assert_eq(restored.furniture_rotation("desk_lamp"), 180.0)
+
+
+func test_v2_profile_migrates_to_v3_with_empty_placed_furniture() -> void:
+	# A v2 dict has no placed_furniture key. Loading shouldn't crash and
+	# the dict should come back empty.
+	var v2_payload: Dictionary = {
+		"version": 2,
+		"woints": 50,
+		"current_day": 3,
+		"best_times": {"mall_day_one": 1500},
+	}
+	var restored: Profile = Profile.from_dict(v2_payload)
+	assert_eq(restored.placed_furniture_ids(), [])
+	assert_eq(restored.best_time_ms("mall_day_one"), 1500)
+
+
+func test_from_dict_drops_malformed_placed_entries() -> void:
+	# Entries with missing position, wrong array length, or non-string id
+	# are dropped. Good entries survive.
+	var payload: Dictionary = {
+		"placed_furniture": {
+			"good": {"position": [1, 2, 3], "rotation": 45.0},
+			"bad_no_pos": {"rotation": 0.0},
+			"bad_pos_len": {"position": [1, 2], "rotation": 0.0},
+			"": {"position": [0, 0, 0], "rotation": 0.0},
+		}
+	}
+	var restored: Profile = Profile.from_dict(payload)
+	assert_true(restored.is_furniture_placed("good"))
+	assert_false(restored.is_furniture_placed("bad_no_pos"))
+	assert_false(restored.is_furniture_placed("bad_pos_len"))
+	assert_false(restored.is_furniture_placed(""))

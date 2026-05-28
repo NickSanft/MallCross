@@ -39,6 +39,11 @@ var _owned_items_before_shop: Array = []
 # them straight to CrosswordUI without re-reading the file.
 var _community_picker: CommunityPuzzlePicker
 var _pending_community_result: Dictionary = {}
+# v1.4.1 Phase 17.2: apartment customization. Edit menu lists owned
+# furniture; clicking Place hands off to the PlacementController for the
+# in-world ghost preview + raycast loop. Both are spawned dynamically.
+var _apartment_menu: ApartmentEditMenu
+var _placement: PlacementController
 
 
 func _ready() -> void:
@@ -46,6 +51,7 @@ func _ready() -> void:
 	_settings = SettingsManager.load_from_path()
 	_setup_achievements()
 	_setup_community_picker()
+	_setup_apartment()
 	_refresh_hud()
 	_apply_settings(_settings)
 	_player.interactable_changed.connect(_on_interactable_changed)
@@ -101,6 +107,29 @@ func _setup_community_picker() -> void:
 	add_child(_community_picker)
 
 
+func _setup_apartment() -> void:
+	# Spawn the edit menu and placement controller as dynamic children, same
+	# pattern as the achievement/community UIs. Hydrate any saved placements
+	# into the world so the player sees their furniture from the moment they
+	# spawn in — not just after re-opening the edit menu.
+	_apartment_menu = ApartmentEditMenu.new()
+	_apartment_menu.name = "ApartmentEditMenu"
+	_apartment_menu.anchor_right = 1.0
+	_apartment_menu.anchor_bottom = 1.0
+	_apartment_menu.closed.connect(_on_apartment_menu_closed)
+	_apartment_menu.place_requested.connect(_on_apartment_place_requested)
+	_apartment_menu.remove_requested.connect(_on_apartment_remove_requested)
+	add_child(_apartment_menu)
+
+	_placement = PlacementController.new()
+	_placement.name = "PlacementController"
+	_placement.placement_confirmed.connect(_on_placement_confirmed)
+	_placement.placement_cancelled.connect(_on_placement_cancelled)
+	add_child(_placement)
+
+	_mall.spawn_placed_furniture(_profile)
+
+
 func _push_unlocks(ids: Array) -> void:
 	# Routes newly-fired achievement ids to the toast queue and persists
 	# the unlock state. No-op for an empty array, so the standard pattern is:
@@ -139,7 +168,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _is_any_modal_open() -> bool:
-	return _crossword_ui.visible or _shop_ui.visible or _settings_menu.visible or _achievements_menu.visible or _community_picker.visible
+	# Placement mode counts as a modal-equivalent: Esc routes to the
+	# placement controller's cancel, not the settings menu open.
+	return _crossword_ui.visible or _shop_ui.visible or _settings_menu.visible or _achievements_menu.visible or _community_picker.visible or _apartment_menu.visible or _placement.is_active()
 
 
 func _open_settings_menu() -> void:
@@ -228,6 +259,8 @@ func _on_interactable_changed(interactable: Node) -> void:
 		_show_daily_puzzle_prompt()
 	elif interactable.has_meta("community_puzzle"):
 		_hud.show_prompt("[E] Browse community puzzles")
+	elif interactable.has_meta("edit_apartment"):
+		_hud.show_prompt("[E] " + interactable.get_meta("apartment_label", "Customize apartment"))
 	elif interactable.has_meta("shop_id"):
 		_hud.show_prompt("[E] " + interactable.get_meta("shop_label", "Shop"))
 	elif interactable.has_meta("sleep_action"):
@@ -295,6 +328,8 @@ func _on_interaction_triggered(interactable: Node) -> void:
 		_open_puzzle(interactable, puzzle_id)
 	elif interactable.has_meta("community_puzzle"):
 		_open_community_picker()
+	elif interactable.has_meta("edit_apartment"):
+		_open_apartment_menu()
 	elif interactable.has_meta("shop_id"):
 		_open_shop(interactable)
 	elif interactable.has_meta("sleep_action"):
@@ -328,6 +363,72 @@ func _open_community_picker() -> void:
 	_community_picker.open(_profile)
 	_player.set_paused_for_ui(true)
 	_hud.hide_prompt()
+
+
+func _open_apartment_menu() -> void:
+	_apartment_menu.open_menu(_profile)
+	_player.set_paused_for_ui(true)
+	_hud.hide_prompt()
+
+
+func _on_apartment_menu_closed() -> void:
+	# Menu can close because (a) the player Esc'd / clicked Close, or
+	# (b) they clicked Place — in which case the placement controller is
+	# about to take over. Only release the Player if no placement is
+	# currently active.
+	if _placement == null or not _placement.is_active():
+		_player.set_paused_for_ui(false)
+		_player.refresh_interaction_target()
+
+
+func _on_apartment_place_requested(item_id: String) -> void:
+	# The menu has already closed itself. Look up the item; if it's not
+	# a valid placeable, bail silently (defensive — the menu shouldn't
+	# allow this state).
+	var item: Item = ItemCatalog.get_item(item_id)
+	if item == null or not item.is_placeable():
+		_player.set_paused_for_ui(false)
+		return
+	# Player keeps paused-for-UI on (mouse stays visible, no movement).
+	# Placement controller drives input itself; releasing the Player here
+	# would let the camera spin from mouse motion while we're trying to
+	# raycast.
+	var camera: Camera3D = _player.get_node_or_null("CameraPivot/Camera3D")
+	if camera == null:
+		# Defensive: no camera == nothing to raycast through.
+		_player.set_paused_for_ui(false)
+		return
+	# Briefly release pause so the camera can move. Players need to look
+	# around to aim the placement. We re-pause on confirm/cancel by way
+	# of the standard handlers.
+	_player.set_paused_for_ui(false)
+	_placement.start(item, camera)
+
+
+func _on_apartment_remove_requested(item_id: String) -> void:
+	# In-place removal: unplace, save, re-spawn the world to drop the
+	# visual, refresh the menu so the row flips back to "Place".
+	if _profile.unplace_furniture(item_id):
+		_mall.spawn_placed_furniture(_profile)
+		ProfileStore.save_to_path(_profile)
+		_apartment_menu.refresh()
+
+
+func _on_placement_confirmed(item_id: String, position: Vector3, rotation_degrees: float) -> void:
+	if _profile.place_furniture(item_id, position, rotation_degrees):
+		ProfileStore.save_to_path(_profile)
+		_mall.spawn_placed_furniture(_profile)
+	# Pop the menu back so the player can place / remove another piece
+	# without walking back to the kiosk every time.
+	_player.set_paused_for_ui(true)
+	_apartment_menu.open_menu(_profile)
+
+
+func _on_placement_cancelled() -> void:
+	# Cancel returns to the edit menu, same as a successful confirm. Saves
+	# the player a kiosk round-trip if they want to try a different item.
+	_player.set_paused_for_ui(true)
+	_apartment_menu.open_menu(_profile)
 
 
 func _on_community_puzzle_chosen(result: Dictionary) -> void:

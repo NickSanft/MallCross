@@ -7,7 +7,7 @@ extends RefCounted
 #
 # Pure model — no disk I/O. ProfileStore handles serialization.
 
-const FORMAT_VERSION: int = 2  # v1.0.1: introduced best_times. Loader migrates v1 forward.
+const FORMAT_VERSION: int = 3  # v1.4.1: introduced placed_furniture. v2/v1 migrate forward to empty dict.
 const DEFAULT_WOINTS: int = 0
 const DEFAULT_DAY: int = 1
 
@@ -28,6 +28,13 @@ var last_solved_day: int = 0
 # Introduced in FORMAT_VERSION 2; absent / non-int values are filtered out
 # during load_from_dict so old v1 profiles migrate forward as an empty dict.
 var best_times: Dictionary = {}
+# item_id -> { "position": [x,y,z], "rotation": yaw_degrees }.
+# Introduced in FORMAT_VERSION 3 (v1.4.1) for the apartment-customization
+# placement system. Each entry represents a piece of furniture the player
+# has placed in the apartment area. Items in this dict are also in
+# owned_items (you can only place what you bought). The complement —
+# owned but not placed — is reachable via owned_items minus the keys here.
+var placed_furniture: Dictionary = {}
 
 # puzzle_id -> CrosswordState (in-memory). Serialized via CrosswordSerializer
 # at to_dict() time so we keep one source of truth for the on-disk shape.
@@ -157,6 +164,86 @@ func can_afford(cost: int) -> bool:
 	return woints >= cost
 
 
+# --- placed furniture (v1.4.1) ---------------------------------------
+
+func place_furniture(item_id: String, pos: Vector3, rotation_degrees: float) -> bool:
+	# Records that the player placed `item_id` at `pos` with the given yaw.
+	# Returns true iff the placement state actually changed (either a brand
+	# new piece appearing in the dict, or an existing piece moved). Callers
+	# use the return for things like "saved" toasts or achievement hooks.
+	#
+	# Owning the item isn't strictly required here — Profile is a dumb
+	# data class. The ApartmentEditMenu / PlacementController guard against
+	# trying to place an unowned item before this is called.
+	if item_id == "":
+		return false
+	var entry: Dictionary = {
+		"position": [pos.x, pos.y, pos.z],
+		"rotation": rotation_degrees,
+	}
+	if placed_furniture.has(item_id):
+		# Same position + rotation == no-op. Cheap equality so we don't
+		# spam "saved" feedback on identical re-places.
+		var prev: Dictionary = placed_furniture[item_id]
+		if _entries_equal(prev, entry):
+			return false
+	placed_furniture[item_id] = entry
+	return true
+
+
+func unplace_furniture(item_id: String) -> bool:
+	# Removes an item's placement entry. The item stays in owned_items —
+	# the player keeps the thing they bought, they just have it stored
+	# back in the menu. Returns true iff the entry existed.
+	if not placed_furniture.has(item_id):
+		return false
+	placed_furniture.erase(item_id)
+	return true
+
+
+func is_furniture_placed(item_id: String) -> bool:
+	return placed_furniture.has(item_id)
+
+
+func furniture_position(item_id: String) -> Vector3:
+	# Returns Vector3.ZERO for unplaced ids — callers should check
+	# is_furniture_placed first if zero is a meaningful position.
+	if not placed_furniture.has(item_id):
+		return Vector3.ZERO
+	var arr: Array = placed_furniture[item_id].get("position", [0.0, 0.0, 0.0])
+	return Vector3(float(arr[0]), float(arr[1]), float(arr[2]))
+
+
+func furniture_rotation(item_id: String) -> float:
+	if not placed_furniture.has(item_id):
+		return 0.0
+	return float(placed_furniture[item_id].get("rotation", 0.0))
+
+
+func placed_furniture_ids() -> Array:
+	# Sorted by id so spawn order is stable across launches (matters for
+	# overlapping debug visuals).
+	var ids: Array = placed_furniture.keys()
+	ids.sort()
+	return ids
+
+
+static func _entries_equal(a: Dictionary, b: Dictionary) -> bool:
+	# Cheap structural comparison for two placement entries.
+	if not a.has("rotation") or not b.has("rotation"):
+		return false
+	if float(a["rotation"]) != float(b["rotation"]):
+		return false
+	var ap: Array = a.get("position", [])
+	var bp: Array = b.get("position", [])
+	if ap.size() != 3 or bp.size() != 3:
+		return false
+	for i in range(3):
+		if float(ap[i]) != float(bp[i]):
+			return false
+	return true
+
+
 func try_purchase(item_id: String, cost: int) -> bool:
 	# Atomic: refuses unless not-owned AND can afford. Deducts Woints and
 	# adds to owned_items on success. Returns true iff purchase happened.
@@ -188,6 +275,7 @@ func to_dict() -> Dictionary:
 		"owned_items": owned_items.duplicate(),
 		"puzzle_states": states_payload,
 		"best_times": best_times.duplicate(),
+		"placed_furniture": placed_furniture.duplicate(true),
 	}
 
 
@@ -219,4 +307,23 @@ static func from_dict(payload: Dictionary) -> Profile:
 			var ms: int = int(raw_best[id])
 			if ms > 0:
 				profile.best_times[id] = ms
+	# placed_furniture: v3+ field. v1/v2 saves don't have it; loaded as empty.
+	# Each entry must have a 3-float "position" array and a numeric
+	# "rotation". Malformed entries are dropped, NOT silently fixed up —
+	# we don't want to silently teleport someone's furniture.
+	var raw_placed: Variant = payload.get("placed_furniture", {})
+	if raw_placed is Dictionary:
+		for id in raw_placed:
+			if not (id is String) or String(id) == "":
+				continue
+			var entry: Variant = raw_placed[id]
+			if not (entry is Dictionary):
+				continue
+			var pos: Variant = entry.get("position", null)
+			if not (pos is Array) or (pos as Array).size() != 3:
+				continue
+			profile.placed_furniture[String(id)] = {
+				"position": [float(pos[0]), float(pos[1]), float(pos[2])],
+				"rotation": float(entry.get("rotation", 0.0)),
+			}
 	return profile

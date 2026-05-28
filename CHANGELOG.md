@@ -4,6 +4,58 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-05-28 — Phase 17.2: Apartment customization (placement)
+
+Second sub-ship of the apartment-customization arc. The furniture you bought in v1.4.0 now **appears in the world**: walk to the new apartment kiosk, open the edit menu, click Place, raycast a ghost-preview around to find a valid surface, press E to drop it.
+
+### Added
+- **Apartment zone** in the back of the food court (`MallGreybox._build_apartment_zone`). One desk prop, one **APARTMENT** kiosk with `edit_apartment: true` metadata, hover label so you can find it. The kiosk sits ~4m in front of the back wall; the desk sits against the east wall.
+- **Anchor surface groups** (`anchor_floor` / `anchor_wall` / `anchor_desk`). `_mark_apartment_anchor_surfaces()` runs at the end of `_ready` and tags the food-court floor, back wall, and apartment desk as legal placement targets for the corresponding `Item.ANCHOR_*` types.
+- **`Profile.placed_furniture`** dict (`FORMAT_VERSION` bumped 2 → 3). Each entry is `{position: [x,y,z], rotation: yaw_degrees}`. Forward migration: v1/v2 saves load with an empty dict — no data loss. Malformed entries (missing/short position, non-string id) are filtered.
+- **`Profile` helper methods**: `place_furniture(id, pos, rot)`, `unplace_furniture(id)`, `is_furniture_placed(id)`, `furniture_position(id)`, `furniture_rotation(id)`, `placed_furniture_ids()`. `place_furniture` is idempotent on identical transforms so we don't fire phantom "saved" feedback.
+- **`ApartmentEditMenu`** (new). Modal listing every owned furniture item with a color swatch + anchor hint + Place / Remove button. Header counts `N placed / M owned`. Empty state points the player at the Home Goods shop. Same Esc-to-close behavior as the other modals.
+- **`PlacementController`** (new). Spawns a translucent box mesh as the placement ghost. Per-frame raycast from the camera; if the hit collider is in the matching `anchor_*` group, the ghost tints green and the position snaps onto the surface (offset by half the item's thickness so it sits flush without z-fighting). Otherwise it tints red. E confirms (only on a valid surface); Esc cancels.
+- **`MallGreybox.spawn_placed_furniture(profile)`** reconciles the scene against the profile. Spawns missing pieces, frees pieces no longer in the profile, updates transforms for existing ones. Idempotent — `GameController` calls it on startup and after every placement/removal.
+- **Placed-furniture visuals**: programmatic colored boxes for now. Per-anchor default sizes — posters are 60x80 cm and 4 cm thick, desk items are 30x30 cm and 35 cm tall, floor items (jukebox) are 50x90x40. The PS1 vertex-snap material applies to placed pieces too so they fit the mall's aesthetic.
+- **+12 tests** covering all the new Profile methods + v2→v3 migration + malformed-entry rejection.
+
+### Changed
+- **`GameController`** gains an `_setup_apartment()` method that spawns the edit menu + placement controller and immediately calls `spawn_placed_furniture(_profile)` so a returning player's furniture is in the world from the moment they spawn. Six new handlers cover the open/close/place/remove/confirm/cancel flow.
+- **`_is_any_modal_open`** now considers `_apartment_menu.visible` and `_placement.is_active()`. Esc routes correctly when a placement is in flight (cancels placement, doesn't re-open settings).
+- **`Profile.FORMAT_VERSION`** bumped to 3.
+- **`project.godot`** version bumped to `1.4.1`.
+
+### Flow
+1. Walk to the blue **APARTMENT** kiosk in the food court → `[E] Customize apartment` prompt.
+2. Press E → ApartmentEditMenu opens. Lists every furniture item you own from Home Goods. Click **Place** on, say, a poster.
+3. Menu closes, mouse is freed for camera-aiming, the ghost preview appears at the screen center's raycast hit.
+4. Look at the **back wall** → ghost turns green at the hit position, label reads "E to confirm".
+5. Press E → poster spawns in place; menu reopens.
+6. Click **Remove** on any placed item → item disappears from the world, row flips back to "Place".
+
+### Architecture
+- **No separate apartment scene yet.** The "apartment" is a labeled patch of the food court for v1.4.1. A proper room with a door behind the back wall lands in Phase 19 (`v1.6.0`). Keeping the apartment in the existing scene means zero new scene-loading code today.
+- **Dynamic UI spawning** — same pattern as the achievement and community menus. The Main.tscn diff stays empty; all the new modal Controls are created in `GameController._setup_apartment()`.
+- **GameController owns the save lifecycle.** PlacementController emits `placement_confirmed(id, pos, rot)` and the GameController is the only place that calls `Profile.place_furniture` + `ProfileStore.save_to_path` + `spawn_placed_furniture`. Keeps the controllers testable and the data flow easy to trace.
+- **Surface offset by item thickness.** `_adjust_for_anchor` pushes the ghost half the item's depth along the surface normal so the box sits flush with the surface instead of z-fighting it. Different math for the wall (thickness is z-depth) vs floor/desk (thickness is y-height).
+- **Re-pause Player on cancel/confirm.** Camera control is restored during placement so the player can aim. Confirm and cancel both re-pause the Player and re-open the edit menu, so the player can place several items in a row without walking back to the kiosk every time.
+
+### Pre-push checklist (Phase 17.2 / v1.4.1)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 21 bundled puzzles (unchanged).
+- [x] GUT: **449/449** tests passing (added 12 for Profile.placed_furniture; `test_format_version_bumped_to_v2` renamed to `test_format_version_is_current` and updated for v3; total up from 437).
+
+### Known limitations
+- **No rotation during placement.** Items spawn axis-aligned at 0° yaw. A future patch can wire `R` to rotate the ghost in 90° increments before confirming.
+- **No pickup-and-move.** Removing currently means menu → Remove → re-Place; we don't yet support clicking an existing piece to grab and reposition.
+- **No collision check between placed items.** You can overlap two posters on the same square inch of wall. Bug fix or feature? TBD.
+- **Visuals are boxes.** Posters are flat green/orange/etc. rectangles; the jukebox is a box; the coffee maker is a box. Real meshes per item id are a future polish pass.
+- **Coffee maker / jukebox / lamp don't do anything yet.** Owning + placing them is currently flavor-only — Phase 17.3 (v1.4.2) wires the actual effects.
+
+[1.4.1]: https://github.com/NickSanft/MallCross/releases/tag/v1.4.1
+
 ## [1.4.0] - 2026-05-28 — Phase 17.1: Home Goods shop + furniture catalog
 
 First sub-ship of the apartment-customization arc. Pure data + shop layer — buying works, **placement and functional effects land in 17.2 / 17.3 (v1.4.1 / v1.4.2)**. Stop here and you have a second mall shop full of items that show up as `owned_items` in the profile but don't do anything visible yet.

@@ -28,6 +28,24 @@ const TABLE_LEG_SIZE: Vector3 = Vector3(0.08, 0.78, 0.08)
 
 const PLAYER_SPAWN_Z_OFFSET: float = 3.0  # from entrance wall
 
+# v1.4.1 (Phase 17.2) apartment zone: a small back-of-food-court area for
+# furniture placement. The sleep cushion already lived here; this just
+# adds a desk prop + an "edit apartment" kiosk + raycast-target groups on
+# the floor / back-wall meshes. Future Phase 19 promotes this to a real
+# room behind a door; today it's just a labeled patch of the food court.
+const APARTMENT_DESK_HEIGHT: float = 0.78
+const APARTMENT_DESK_SIZE: Vector3 = Vector3(1.6, 0.78, 0.7)
+const APARTMENT_DESK_COLOR: Color = Color(0.40, 0.28, 0.22)
+const APARTMENT_KIOSK_SIZE: Vector3 = Vector3(0.7, 1.1, 0.4)
+const APARTMENT_KIOSK_COLOR: Color = Color(0.30, 0.55, 0.85)
+
+# Groups the PlacementController uses to validate raycast hits.
+const APARTMENT_ANCHOR_GROUPS: Dictionary = {
+	Item.ANCHOR_FLOOR: "anchor_floor",
+	Item.ANCHOR_WALL: "anchor_wall",
+	Item.ANCHOR_DESK: "anchor_desk",
+}
+
 # Phase 8 PS1/N64 aesthetic. Lower vertex_snap = chunkier wobble. 100 is the
 # sweet spot for a 5–40 m mall: noticeable jitter, no broken-looking geometry.
 const PS1_VERTEX_SNAP: float = 100.0
@@ -57,6 +75,12 @@ var _store_front_colors: Array[Color] = [
 var _spawned_npcs: Dictionary = {}
 
 
+var _apartment_desk: StaticBody3D  # cached so spawn_placed_furniture knows where the desk anchor is
+# Track spawned furniture nodes by item_id so removal can free the right
+# one without walking the scene tree. Populated by spawn_placed_furniture.
+var _placed_furniture_nodes: Dictionary = {}
+
+
 func _ready() -> void:
 	_build_environment()
 	_build_lighting()
@@ -68,8 +92,10 @@ func _ready() -> void:
 	_build_food_court_walls()
 	_build_food_court_tables()
 	_build_sleep_cushion()
+	_build_apartment_zone()
 	_spawn_npcs()
 	_position_player()
+	_mark_apartment_anchor_surfaces()
 
 
 func _spawn_npcs() -> void:
@@ -253,6 +279,141 @@ func _build_food_court_walls() -> void:
 	var shoulder_z: float = CORRIDOR_LENGTH * 0.5 + WALL_THICKNESS * 0.5
 	add_child(_make_box("FoodCourtShoulderWest", Vector3(-CORRIDOR_WIDTH * 0.5 - shoulder_width * 0.5, WALL_HEIGHT * 0.5, shoulder_z), shoulder_size, FOOD_COURT_WALL_COLOR))
 	add_child(_make_box("FoodCourtShoulderEast", Vector3(CORRIDOR_WIDTH * 0.5 + shoulder_width * 0.5, WALL_HEIGHT * 0.5, shoulder_z), shoulder_size, FOOD_COURT_WALL_COLOR))
+
+
+func _build_apartment_zone() -> void:
+	# Position the desk + kiosk near the back of the food court, on the
+	# east side of the sleep cushion. Far enough from the cushion that
+	# walking up to one doesn't accidentally trigger the other.
+	var fc_z_back: float = CORRIDOR_LENGTH * 0.5 + FOOD_COURT_DEPTH
+	# Desk: against the east wall, ~1m in from the back. Players can place
+	# desk-anchored items (lamp, coffee maker) on the top surface.
+	var desk_position: Vector3 = Vector3(
+		FOOD_COURT_WIDTH * 0.5 - APARTMENT_DESK_SIZE.x * 0.5 - 0.3,
+		APARTMENT_DESK_HEIGHT * 0.5,
+		fc_z_back - 2.4
+	)
+	_apartment_desk = _make_box("ApartmentDesk", desk_position, APARTMENT_DESK_SIZE, APARTMENT_DESK_COLOR)
+	add_child(_apartment_desk)
+
+	# Kiosk: an interactable in front of the desk. Walking up + pressing E
+	# opens the apartment edit menu (handled by GameController).
+	var kiosk_position: Vector3 = Vector3(
+		FOOD_COURT_WIDTH * 0.5 - APARTMENT_KIOSK_SIZE.x * 0.5 - 0.3,
+		APARTMENT_KIOSK_SIZE.y * 0.5,
+		fc_z_back - 4.2
+	)
+	var kiosk: StaticBody3D = _make_box("ApartmentKiosk", kiosk_position, APARTMENT_KIOSK_SIZE, APARTMENT_KIOSK_COLOR)
+	kiosk.add_to_group(Player.INTERACTION_GROUP)
+	kiosk.set_meta("edit_apartment", true)
+	kiosk.set_meta("apartment_label", "Customize apartment")
+	add_child(kiosk)
+
+	# Hover label so the kiosk is findable.
+	var label: Label3D = Label3D.new()
+	label.text = "APARTMENT"
+	label.font_size = 120
+	label.modulate = Color(0.85, 0.95, 1.0)
+	label.outline_size = 8
+	label.outline_modulate = Color.BLACK
+	label.position = kiosk_position + Vector3(0.0, APARTMENT_KIOSK_SIZE.y * 0.5 + 0.5, 0.0)
+	label.pixel_size = 0.005
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	add_child(label)
+
+
+func _mark_apartment_anchor_surfaces() -> void:
+	# Tags meshes the PlacementController will accept as raycast targets
+	# for each anchor type. The check runs once at _ready end, after every
+	# build step has created its node, so we don't have to remember to
+	# add_to_group inline at each box construction site.
+	#
+	# Anchor mapping:
+	#   FloorPaths: the food court floor (any placement away from the desk).
+	#   Wall: the food court back wall (posters go here).
+	#   Desk: the top face of the apartment desk we just built.
+	var floor_node: Node = get_node_or_null("FoodCourtFloor")
+	if floor_node != null:
+		floor_node.add_to_group(APARTMENT_ANCHOR_GROUPS[Item.ANCHOR_FLOOR])
+	var back_wall: Node = get_node_or_null("FoodCourtBackWall")
+	if back_wall != null:
+		back_wall.add_to_group(APARTMENT_ANCHOR_GROUPS[Item.ANCHOR_WALL])
+	if _apartment_desk != null:
+		_apartment_desk.add_to_group(APARTMENT_ANCHOR_GROUPS[Item.ANCHOR_DESK])
+
+
+func spawn_placed_furniture(profile: Profile) -> void:
+	# Called by GameController on _ready and after every placement/removal.
+	# Idempotent: walks the existing _placed_furniture_nodes dict and
+	# reconciles against profile.placed_furniture. Items present in the
+	# profile but not the scene get spawned; items in the scene but not
+	# the profile get freed; items in both get their transform updated.
+	#
+	# This stays cheap because the furniture count is small (handful) and
+	# the dict ops are O(1).
+	if profile == null:
+		return
+	# Free any nodes whose item_id no longer appears in the profile.
+	var live_ids: Dictionary = {}
+	for id in profile.placed_furniture_ids():
+		live_ids[id] = true
+	var stale: Array = []
+	for existing_id in _placed_furniture_nodes:
+		if not live_ids.has(existing_id):
+			stale.append(existing_id)
+	for id in stale:
+		var node: Node = _placed_furniture_nodes[id]
+		if node != null and is_instance_valid(node):
+			node.queue_free()
+		_placed_furniture_nodes.erase(id)
+	# Spawn or update each placed item.
+	for id in profile.placed_furniture_ids():
+		var item: Item = ItemCatalog.get_item(id)
+		if item == null:
+			continue
+		var pos: Vector3 = profile.furniture_position(id)
+		var yaw: float = profile.furniture_rotation(id)
+		if _placed_furniture_nodes.has(id):
+			var existing: Node3D = _placed_furniture_nodes[id]
+			existing.position = pos
+			existing.rotation = Vector3(0.0, deg_to_rad(yaw), 0.0)
+		else:
+			var node: Node3D = _make_furniture_visual(item, pos, yaw)
+			_placed_furniture_nodes[id] = node
+			add_child(node)
+
+
+func _make_furniture_visual(item: Item, pos: Vector3, yaw: float) -> Node3D:
+	# Programmatic box per item, sized by anchor so wall items stay flat,
+	# floor items are tall, desk items are small. Color comes from the
+	# catalog. Future Phase 17.3 / Phase 18+ replace these with real
+	# mesh assets per item id.
+	var size: Vector3 = _visual_size_for_anchor(item.anchor)
+	# Render through the existing PS1 material so the placed furniture
+	# matches the mall's aesthetic out of the box.
+	var node: StaticBody3D = _make_box("PlacedFurniture_" + item.id, Vector3.ZERO, size, item.color)
+	node.position = pos
+	node.rotation = Vector3(0.0, deg_to_rad(yaw), 0.0)
+	# Group used by PlacementController to detect "this is already placed
+	# furniture, don't snap to it" in future rotation/move support.
+	node.add_to_group("placed_furniture")
+	return node
+
+
+static func _visual_size_for_anchor(anchor: String) -> Vector3:
+	match anchor:
+		Item.ANCHOR_WALL:
+			# Posters: 60x80 cm, thin against the wall.
+			return Vector3(0.60, 0.80, 0.04)
+		Item.ANCHOR_DESK:
+			# Small appliances/lamps: ~30x30 footprint, ~35cm tall.
+			return Vector3(0.30, 0.35, 0.30)
+		Item.ANCHOR_FLOOR:
+			# Jukebox-ish: ~50x90x40.
+			return Vector3(0.50, 0.90, 0.40)
+		_:
+			return Vector3(0.30, 0.30, 0.30)
 
 
 func _build_sleep_cushion() -> void:
