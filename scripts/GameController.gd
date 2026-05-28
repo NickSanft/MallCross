@@ -33,12 +33,19 @@ var _achievements_menu: AchievementsMenu
 # diff against the post-close state — anything new is a fresh purchase
 # that needs notify_item_purchased.
 var _owned_items_before_shop: Array = []
+# v1.3.0 Phase 16: modal picker for user://puzzles/. Spawned dynamically
+# like the achievement UIs. The currently-selected community puzzle's
+# parsed-dict + reward are cached here so _open_community_puzzle can hand
+# them straight to CrosswordUI without re-reading the file.
+var _community_picker: CommunityPuzzlePicker
+var _pending_community_result: Dictionary = {}
 
 
 func _ready() -> void:
 	_profile = ProfileStore.load_from_path()
 	_settings = SettingsManager.load_from_path()
 	_setup_achievements()
+	_setup_community_picker()
 	_refresh_hud()
 	_apply_settings(_settings)
 	_player.interactable_changed.connect(_on_interactable_changed)
@@ -82,6 +89,18 @@ func _setup_achievements() -> void:
 	add_child(_achievements_toast)
 
 
+func _setup_community_picker() -> void:
+	# Spawned in _ready alongside the achievement UIs. Same lifecycle
+	# pattern: dynamic Control children of GameController, no Main.tscn diff.
+	_community_picker = CommunityPuzzlePicker.new()
+	_community_picker.name = "CommunityPuzzlePicker"
+	_community_picker.anchor_right = 1.0
+	_community_picker.anchor_bottom = 1.0
+	_community_picker.puzzle_chosen.connect(_on_community_puzzle_chosen)
+	_community_picker.closed.connect(_on_community_picker_closed)
+	add_child(_community_picker)
+
+
 func _push_unlocks(ids: Array) -> void:
 	# Routes newly-fired achievement ids to the toast queue and persists
 	# the unlock state. No-op for an empty array, so the standard pattern is:
@@ -120,7 +139,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _is_any_modal_open() -> bool:
-	return _crossword_ui.visible or _shop_ui.visible or _settings_menu.visible or _achievements_menu.visible
+	return _crossword_ui.visible or _shop_ui.visible or _settings_menu.visible or _achievements_menu.visible or _community_picker.visible
 
 
 func _open_settings_menu() -> void:
@@ -207,6 +226,8 @@ func _on_interactable_changed(interactable: Node) -> void:
 		_hud.show_prompt("[E] " + interactable.get_meta("puzzle_label", "Crossword"))
 	elif interactable.has_meta("daily_puzzle"):
 		_show_daily_puzzle_prompt()
+	elif interactable.has_meta("community_puzzle"):
+		_hud.show_prompt("[E] Browse community puzzles")
 	elif interactable.has_meta("shop_id"):
 		_hud.show_prompt("[E] " + interactable.get_meta("shop_label", "Shop"))
 	elif interactable.has_meta("sleep_action"):
@@ -272,6 +293,8 @@ func _on_interaction_triggered(interactable: Node) -> void:
 			# prompt up, do nothing.
 			return
 		_open_puzzle(interactable, puzzle_id)
+	elif interactable.has_meta("community_puzzle"):
+		_open_community_picker()
 	elif interactable.has_meta("shop_id"):
 		_open_shop(interactable)
 	elif interactable.has_meta("sleep_action"):
@@ -299,6 +322,41 @@ func _open_puzzle(interactable: Node, puzzle_id: String) -> void:
 	_crossword_ui.open_puzzle(puzzle, cached_state, reward_remaining, _profile.is_puzzle_solved(puzzle_id), _profile, puzzle_id, 0)
 	_player.set_paused_for_ui(true)
 	_hud.hide_prompt()
+
+
+func _open_community_picker() -> void:
+	_community_picker.open(_profile)
+	_player.set_paused_for_ui(true)
+	_hud.hide_prompt()
+
+
+func _on_community_puzzle_chosen(result: Dictionary) -> void:
+	# Stash + open the puzzle. The picker has already closed itself before
+	# emitting, so this is the only handler doing modal-state changes.
+	_pending_community_result = result
+	var puzzle: Dictionary = result.get("puzzle", {})
+	var puzzle_id: String = String(result.get("puzzle_id", ""))
+	if puzzle_id == "" or puzzle.get("grid") == null:
+		push_warning("Community puzzle missing grid; aborting open.")
+		_player.set_paused_for_ui(false)
+		return
+	var reward_remaining: int = 0
+	if not _profile.is_puzzle_solved(puzzle_id):
+		reward_remaining = WointsConfig.REWARD_COMMUNITY
+	_current_puzzle_id = puzzle_id
+	_current_reward = reward_remaining
+	var cached_state: CrosswordState = _profile.get_cached_state(puzzle_id)
+	_crossword_ui.open_puzzle(puzzle, cached_state, reward_remaining, _profile.is_puzzle_solved(puzzle_id), _profile, puzzle_id, 0)
+
+
+func _on_community_picker_closed() -> void:
+	# Picker was dismissed with Esc / Close (no puzzle chosen). Restore
+	# player input. If the picker was closed because a puzzle WAS chosen,
+	# CrosswordUI is up and Player stays paused — _on_crossword_closed will
+	# release it later.
+	if not _crossword_ui.visible:
+		_player.set_paused_for_ui(false)
+		_player.refresh_interaction_target()
 
 
 func _open_shop(interactable: Node) -> void:
@@ -372,19 +430,30 @@ func _on_shop_closed() -> void:
 func _on_puzzle_solved(elapsed_ms: int, used_check_letter: bool) -> void:
 	if _current_puzzle_id == "":
 		return
+	# Community puzzles (user://puzzles/*.json) follow a different reward
+	# model: half-MIDI flat reward, no streak bonus, no streak credit. The
+	# update_streak=false flag on mark_puzzle_solved enforces that.
+	var is_community: bool = _is_community_puzzle_id(_current_puzzle_id)
 	# Record the time first — applies whether or not this is the first solve,
 	# so a re-solve that improves the record still counts. Profile.record_solve_time
 	# handles the "only if better than previous" check internally.
 	_profile.record_solve_time(_current_puzzle_id, elapsed_ms)
-	var first_solve: bool = _profile.mark_puzzle_solved(_current_puzzle_id)
+	var first_solve: bool = _profile.mark_puzzle_solved(_current_puzzle_id, not is_community)
 	if first_solve:
-		var bonus: int = WointsConfig.streak_bonus(_profile.streak)
-		_profile.add_woints(_current_reward + bonus)
+		if is_community:
+			# Flat reward, no streak bonus.
+			_profile.add_woints(_current_reward)
+		else:
+			var bonus: int = WointsConfig.streak_bonus(_profile.streak)
+			_profile.add_woints(_current_reward + bonus)
 		_refresh_hud()
 	ProfileStore.save_to_path(_profile)
 	# Achievement notifications fire whether or not it's a first solve — a
 	# re-solve with a faster time can still earn speed_mini, and notify_woints
 	# is idempotent so calling it on every solve is fine.
+	# Community puzzles route through the same notify_* hooks but their
+	# puzzle_ids won't match any tier-gated achievement (mall_day_one etc.),
+	# so they only count toward universal achievements like first_solve.
 	var difficulty: String = _difficulty_for_puzzle_id(_current_puzzle_id)
 	var fired_solve: Array = _achievements.notify_puzzle_solved(
 		_current_puzzle_id, difficulty, _profile.current_day,
@@ -395,6 +464,13 @@ func _on_puzzle_solved(elapsed_ms: int, used_check_letter: bool) -> void:
 	_push_unlocks(fired_streak)
 	var fired_hoard: Array = _achievements.notify_woints(_profile.woints, _profile.current_day)
 	_push_unlocks(fired_hoard)
+
+
+static func _is_community_puzzle_id(puzzle_id: String) -> bool:
+	# Convention: community puzzle IDs are their res-style absolute paths,
+	# which always start with "user://" (the loader emits that). Anything
+	# else is bundled content.
+	return puzzle_id.begins_with("user://")
 
 
 func _difficulty_for_puzzle_id(puzzle_id: String) -> String:

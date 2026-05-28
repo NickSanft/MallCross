@@ -4,6 +4,52 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-05-27 — Phase 16: Community puzzle table
+
+Players can drop `.json` puzzle files into `user://puzzles/` and they appear on a new **COMMUNITY** food-court table the next time you walk up to it. Tiny code, big replay value.
+
+### Added
+- **`scripts/CommunityPuzzleLoader.gd`** — scans `user://puzzles/*.json` at picker-open time. Each file goes through `PuzzleLoader.load_from_path` + `PuzzleValidator.validate`. Returns a result dict per file containing `{path, puzzle_id, title, author, size, valid, error, puzzle}`. Even rejected files surface their claimed title in the picker so modders can see which file the error is about.
+- **`scripts/CommunityPuzzlePicker.gd`** — modal browser layered like the other modals. Scrollable list of every file in `user://puzzles/` with a status indicator (✓ Valid or ✗ Error: \<first error message\>). Valid entries have a Play button that closes the picker and emits `puzzle_chosen`; invalid entries display their rejection reason inline. Empty directory shows a "drop .json here, see docs/MOD_PUZZLES.md" hint. **Rescans on every open** so a freshly-dropped file shows up without restarting the game.
+- **COMMUNITY table** in the food court. Distinct green tint so it's visually separable from MINI/MIDI/FULL. Tagged with `community_puzzle` metadata; GameController routes interactions to the picker rather than CrosswordUI directly.
+- **`docs/MOD_PUZZLES.md`** — full file-format spec, OS-specific paths to the puzzle dir, validator CLI usage, a worked example, and notes on reward + achievement interactions.
+- **`WointsConfig.REWARD_COMMUNITY = 60`** — half the MIDI rate. Community solves explicitly do *not* extend the daily streak (see migration note below).
+- **`Profile.mark_puzzle_solved(id, update_streak=true)`** — new optional second arg. Community puzzles pass `false` so they record into `puzzles_solved` (for "already solved" tracking) but don't bump `streak` / `last_solved_day`. Default arg keeps every existing call site behaving identically.
+- **13 new tests** across `test_community_puzzle_loader.gd` (10) and `test_profile.gd` (3 new mark_puzzle_solved tests covering the update_streak flag).
+
+### Changed
+- **`scripts/MallGreybox.gd`** food-court layout grows from 3 to 4 tables. Layout helper handles the row spacing transparently; the community table fits in the existing 20 m width (4-table span ~13.5 m).
+- **`scripts/GameController.gd`** gains:
+  - `_setup_community_picker()` spawning the picker as a dynamic Control child (no Main.tscn change).
+  - `_open_community_picker()` / `_on_community_puzzle_chosen()` / `_on_community_picker_closed()` handlers.
+  - `_is_community_puzzle_id()` helper using the `user://` prefix as the convention.
+  - `_on_puzzle_solved` branches: community solves use the flat REWARD_COMMUNITY with no streak bonus, daily solves keep their existing streak-bonus path.
+  - `_is_any_modal_open()` now considers the picker.
+- **`scripts/Profile.gd::mark_puzzle_solved`** signature extended to `(puzzle_id, update_streak: bool = true)`. Behavior unchanged for all existing callers.
+
+### Why it matters
+The cheapest way to add ~∞ replay value: let players make their own puzzles. The pipeline is already there (PuzzleValidator + PuzzleLoader + CrosswordUI all generic), so the v1.3.0 work is mostly UX — a picker, a table, a doc, and a streak-isolation flag. A modder doesn't need to clone the repo, rebuild, or even restart the game — drop the file, walk to the table.
+
+### Architecture
+- **Path as ID.** Community puzzles use their `user://` path as the `puzzle_id`. Profile.puzzles_solved keys by string and accepts any value, so the daily-puzzle tracking infrastructure rebooted for community content with zero schema changes. The `user://` prefix doubles as the "is this a community puzzle?" check used throughout GameController.
+- **Streak isolation.** Without the `update_streak=false` opt-out, a modder could drop 30 of their own puzzles in and trivially run the streak counter up to "Monthly Mainstay" without engaging the curated MINI/MIDI/FULL content. The flag preserves the streak as a curated-content-only signal.
+- **Achievement crosstalk.** Universal achievements (First Solve, Going It Alone, Hoarder, Speed Demon when the community puzzle happens to be 5x5 and solved under 60s) intentionally count community solves — those describe player behavior, not which puzzle was solved. Tier-gated achievements (MINI Day 1, Polyglot) are scoped by puzzle_id to the bundled set, so community solves can't fire them.
+- **Re-scan on open.** The picker calls `CommunityPuzzleLoader.scan_user_dir()` on every `open()`. A few files × a few ms per validate is unnoticeable; the upside is that drag-and-drop workflows during a session just work.
+
+### Pre-push checklist (Phase 16 / v1.3.0)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 21 bundled puzzle files (unchanged).
+- [x] GUT: **418/418** tests passing (added 13 across loader + profile.mark_puzzle_solved; total up from 405).
+
+### Known limitations
+- **No subdirectory recursion.** Only `.json` files directly inside `user://puzzles/` are scanned. Fine for now; nested directories would require a UX decision on how to group them in the picker.
+- **No best-time-per-community-puzzle leaderboard.** Bests are tracked per-id (and the picker shows the "(Already solved)" badge), but the per-puzzle best-time display in food-court prompts is only implemented for the daily tables.
+- **No content moderation.** A malicious puzzle file could ship with offensive clue text. The validator only checks structure, not content. Player-curated lists are the answer if this ever becomes a real problem.
+
+[1.3.0]: https://github.com/NickSanft/MallCross/releases/tag/v1.3.0
+
 ## [1.2.0] - 2026-05-27 — Phase 15: Achievements
 
 Self-contained achievement system. Local JSON catalog, no backend, toast on unlock, browsable menu accessible from settings.

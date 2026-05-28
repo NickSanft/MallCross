@@ -59,6 +59,40 @@ func test_mark_puzzle_solved_ignores_empty_id() -> void:
 	assert_false(profile.is_puzzle_solved(""))
 
 
+func test_mark_puzzle_solved_default_updates_streak() -> void:
+	# Default behavior (used by daily puzzles): mark_puzzle_solved bumps
+	# both streak and last_solved_day. Documented baseline.
+	var profile: Profile = Profile.new()
+	profile.current_day = 1
+	profile.mark_puzzle_solved("daily")
+	assert_eq(profile.streak, 1)
+	assert_eq(profile.last_solved_day, 1)
+
+
+func test_mark_puzzle_solved_with_update_streak_false_skips_streak() -> void:
+	# Community puzzles (v1.3.0+) pass update_streak=false so they're
+	# recorded for "already solved" but don't influence the daily streak.
+	var profile: Profile = Profile.new()
+	profile.current_day = 1
+	profile.mark_puzzle_solved("user://puzzles/community.json", false)
+	assert_true(profile.is_puzzle_solved("user://puzzles/community.json"))
+	assert_eq(profile.streak, 0)
+	assert_eq(profile.last_solved_day, 0)
+
+
+func test_mixed_community_and_daily_solves_preserve_streak_purity() -> void:
+	# Solve a daily, then a community, then another daily. The community
+	# solve in the middle must not reset or extend the streak.
+	var profile: Profile = Profile.new()
+	profile.current_day = 1
+	profile.mark_puzzle_solved("mall_day_one")  # daily; streak -> 1
+	profile.mark_puzzle_solved("user://puzzles/x.json", false)  # community; no change
+	profile.advance_day()
+	profile.mark_puzzle_solved("mall_day_two")  # daily; streak -> 2
+	assert_eq(profile.streak, 2)
+	assert_eq(profile.last_solved_day, 2)
+
+
 func test_is_puzzle_solved_false_by_default() -> void:
 	var profile: Profile = Profile.new()
 	assert_false(profile.is_puzzle_solved("demo_5x5"))

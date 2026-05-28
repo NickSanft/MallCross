@@ -275,12 +275,61 @@ func _build_food_court_tables() -> void:
 	# Tables sit toward the back half of the food court, leaving open space
 	# near the corridor mouth for foot traffic.
 	var table_row_center: Vector3 = Vector3(0.0, 0.0, fc_z_center + 2.0)
-	var positions: Array[Vector3] = MallLayoutMath.food_court_table_positions(TABLE_COUNT, TABLE_SPACING, table_row_center)
-	var difficulty_labels: Array[String] = ["MINI", "MIDI", "FULL"]
-	# Phase 10.1: all three tables are daily_puzzle interactables. PuzzleSchedule
-	# resolves the puzzle for each (difficulty, day) pair at interact time.
+	# Phase 10.1: MINI/MIDI/FULL daily_puzzle tables.
+	# Phase 16 (v1.3.0): COMMUNITY table added as a 4th interactable. The
+	# row-position helper handles the extra entry transparently; food
+	# court width has enough room (20m vs the 4-table span of ~13.5m).
+	var labels: Array[String] = ["MINI", "MIDI", "FULL", "COMMUNITY"]
+	var positions: Array[Vector3] = MallLayoutMath.food_court_table_positions(labels.size(), TABLE_SPACING, table_row_center)
 	for i in range(positions.size()):
-		_build_table("Table_" + difficulty_labels[i], positions[i], difficulty_labels[i], true)
+		var label: String = labels[i]
+		if label == "COMMUNITY":
+			_build_community_table(positions[i])
+		else:
+			_build_table("Table_" + label, positions[i], label, true)
+
+
+func _build_community_table(table_position: Vector3) -> void:
+	# Visually identical to the daily-puzzle tables but tagged with
+	# community_puzzle metadata so GameController routes the interact to
+	# the picker UI instead of CrosswordUI directly.
+	var table_root: Node3D = Node3D.new()
+	table_root.name = "Table_COMMUNITY"
+	table_root.position = table_position
+	add_child(table_root)
+
+	var top_pos: Vector3 = Vector3(0.0, TABLE_TOP_HEIGHT, 0.0)
+	# Distinct green tint so players can spot the community table at a glance.
+	var community_color: Color = Color(0.35, 0.55, 0.42)
+	var top: StaticBody3D = _make_box("Top", top_pos, TABLE_TOP_SIZE, community_color)
+	top.add_to_group(Player.INTERACTION_GROUP)
+	top.set_meta("community_puzzle", true)
+	top.set_meta("woints_reward", WointsConfig.REWARD_COMMUNITY)
+	table_root.add_child(top)
+
+	var leg_x: float = TABLE_TOP_SIZE.x * 0.5 - 0.12
+	var leg_z: float = TABLE_TOP_SIZE.z * 0.5 - 0.12
+	var leg_y: float = TABLE_LEG_SIZE.y * 0.5
+	var leg_corners: Array[Vector3] = [
+		Vector3(leg_x, leg_y, leg_z),
+		Vector3(-leg_x, leg_y, leg_z),
+		Vector3(leg_x, leg_y, -leg_z),
+		Vector3(-leg_x, leg_y, -leg_z),
+	]
+	for i in range(leg_corners.size()):
+		table_root.add_child(_make_box("Leg_" + str(i), leg_corners[i], TABLE_LEG_SIZE, TABLE_LEG_COLOR))
+
+	var hover_label: Label3D = Label3D.new()
+	hover_label.text = "COMMUNITY"
+	hover_label.font_size = 130
+	hover_label.modulate = Color(0.55, 0.95, 0.65)
+	hover_label.outline_size = 8
+	hover_label.outline_modulate = Color.BLACK
+	hover_label.position = Vector3(0.0, TABLE_TOP_HEIGHT + 0.9, 0.0)
+	hover_label.pixel_size = 0.005
+	hover_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	hover_label.no_depth_test = true
+	table_root.add_child(hover_label)
 
 
 func _build_table(table_name: String, table_position: Vector3, label_text: String, daily_puzzle: bool = false) -> void:

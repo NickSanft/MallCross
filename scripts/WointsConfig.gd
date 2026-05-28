@@ -9,6 +9,11 @@ const REWARD_MINI: int = 50
 const REWARD_MIDI: int = 120
 const REWARD_FULL: int = 300
 const REWARD_DEFAULT: int = 25
+# Community puzzles pay half the MIDI rate. They're not curated for
+# difficulty or content quality so the payout reflects that, and they
+# explicitly don't credit the daily streak — there's no fairness model
+# for "I dropped seven of my own puzzles in and they all counted" otherwise.
+const REWARD_COMMUNITY: int = 60
 
 # Streak bonus = (streak - 1) * STREAK_BONUS_PER_DAY. Day 1 of a streak earns
 # nothing extra; day 2 = +5; day 3 = +10; ...

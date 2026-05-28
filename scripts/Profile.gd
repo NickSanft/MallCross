@@ -38,13 +38,21 @@ func add_woints(amount: int) -> void:
 	woints = max(0, woints + amount)
 
 
-func mark_puzzle_solved(puzzle_id: String) -> bool:
+func mark_puzzle_solved(puzzle_id: String, update_streak: bool = true) -> bool:
 	# Returns true if this is the first time the puzzle has been solved (so
 	# the caller knows to award Woints). Returns false on repeat solves.
-	# Also updates `streak` and `last_solved_day` for the first-solve case.
+	#
+	# When `update_streak` is true (the default — used for bundled
+	# MINI/MIDI/FULL daily puzzles), also bumps `streak` and `last_solved_day`.
+	# Community puzzles (v1.3.0+) pass false so they're recorded for
+	# "already solved" tracking but don't influence the daily streak —
+	# otherwise a player who drops 7 of their own puzzles in could
+	# trivially run the streak counter up to 30+ without any of the
+	# curated content.
 	if puzzle_id == "" or puzzles_solved.has(puzzle_id):
 		return false
-	_update_streak_on_solve()
+	if update_streak:
+		_update_streak_on_solve()
 	puzzles_solved[puzzle_id] = {"first_solved_day": current_day}
 	return true
 
