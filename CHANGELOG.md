@@ -4,6 +4,52 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-05-28 — Phase 18: NPC ambient pathing
+
+Polish phase — no new gameplay. **4 background NPCs now wander the mall**, walking back and forth along hand-authored patrols. The mall finally feels populated rather than diorama-still.
+
+### Added
+- **`scripts/AmbientNPCMath.gd`** — pure-function helpers used by AmbientNPC's `_physics_process`. Keeps the scene-tree-dependent code separate from the testable math.
+  - `step_toward(current, target, speed, delta)` — advances along the line, caps at target on overshoot, returns `{position, reached}`.
+  - `bob_y_offset(distance_walked, amplitude, cycles_per_meter)` — sine-wave gait bob. 0 at start, oscillates within `±amplitude`.
+  - `yaw_toward(from, to)` — Y-axis rotation in radians via `atan2(dx, dz)`. Ignores Y component; returns 0 for degenerate same-point calls.
+  - `is_within_lod(npc_pos, player_pos, threshold)` — distance gate for the LOD skip path.
+- **`scripts/AmbientNPC.gd`** — non-interactive `Node3D` that walks between two waypoints, pauses 1.5s at each endpoint, then reverses. Visually similar to the dialog NPCs (capsule body + box head, PS1 material) but smaller (1.4m vs 1.6m) so they're distinguishable at a glance. **No collision, no proximity area, no speech label** — pure background presence.
+  - Defaults: walk speed 1.4 m/s, bob amplitude 3 cm, bob frequency 0.7 cycles/m, idle 1.5s, LOD distance 20 m.
+  - `configure(start, end, body_color, head_color)` sets the patrol and builds the visual before `_ready`.
+  - `cache_player(player)` opt-in for LOD checks — without it, the NPC simulates every frame.
+- **4 ambient NPCs** placed in `MallGreybox.AMBIENT_NPC_DATA`: two walking opposite directions along the corridor, two crossing the food court east-to-west and back. Different body/head colors so they read as distinct people.
+- **+19 new tests** in `test_ambient_npc_math.gd` covering all four helpers + the degenerate cases (overshoot, zero-step, same-point yaw, negative threshold).
+
+### Changed
+- **`MallGreybox`** spawns the ambient NPCs alongside the dialog NPCs in `_ready`. New `_spawn_ambient_npcs()` method looks up the Player node (if present) so each ambient NPC can cache it for LOD checks. Headless smoke runs without a Player still simulate the NPCs (LOD just falls through to always-on, slightly more CPU).
+- **`project.godot`** version bumped to `1.5.0`.
+
+### Why it matters
+At a long enough hallway, an empty mall starts to look like a museum diorama. Four NPCs walking back and forth — even in PS1-chunky vertex-snap style — gives the mall a pulse. The performance cost is negligible: LOD freezes any NPC more than 20 m from the player (past the fog falloff anyway), so the worst case is ~4 NPCs × one distance check + one move + one bob calc per frame.
+
+### Architecture
+- **Math first, scene wrapper second.** `AmbientNPCMath` holds every formula; `AmbientNPC` is a thin Node3D wrapper that calls into it. Tests run against the math without instantiating Node3D scenes — 19 tests in ~0.1s.
+- **Bob phase preserved across idle.** `_bob_distance` keeps incrementing even when the NPC is parked at a waypoint, so the next walk segment picks up exactly where the previous one left off. Avoids the visual hitch of a re-zeroed gait.
+- **No collision = no walls in the way.** Patrol routes are pre-authored to stay on open corridor or food-court floor. No pathfinding, no NavigationAgent3D, no nav-mesh bake. Cheapest possible "the NPC moves" implementation.
+- **LOD is opt-in.** `cache_player(player)` is an optional setup call; without it, NPCs simulate unconditionally. Keeps the helper easy to use in tests where there is no player.
+- **PS1 vertex-snap papers over the lack of animation.** The shader already wobbles vertex positions every frame; subtle bob added on top reads as a walk cycle without any skeletal rig or anim state machine.
+
+### Pre-push checklist (Phase 18 / v1.5.0)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 120 res://scenes/Main.tscn` exit 0 (longer than usual to exercise ambient NPC walking through one idle/walk cycle).
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 21 bundled puzzles (unchanged).
+- [x] GUT: **485/485** tests passing (added 19 across AmbientNPCMath; total up from 466).
+
+### Known limitations
+- **Linear patrols only.** No curves, no branching, no destination-pick logic — each NPC owns exactly two waypoints. Adequate for v1.5.0; Phase 19's second-floor work might want richer paths.
+- **No collision avoidance.** Two ambient NPCs whose patrols intersect will phase through each other. Not visible in practice with the current four paths but could matter once more are added.
+- **No anim state machine.** The bob + walking flag is the whole "animation system." Adequate for chunky PS1 aesthetic; future polish might add a slight body-yaw wobble or arm sway.
+- **NPCs are silent.** They don't emit footstep sounds. Player footsteps still play. Could route ambient NPC footsteps through the SFX bus in a future patch.
+
+[1.5.0]: https://github.com/NickSanft/MallCross/releases/tag/v1.5.0
+
 ## [1.4.2] - 2026-05-28 — Phase 17.3: Functional furniture
 
 Third and final sub-ship of the apartment customization arc. The three appliance items finally **do something**: the coffee maker brews a daily +20% bonus, the jukebox plays procedural muzak, the desk lamp emits a warm light. Posters stay cosmetic.

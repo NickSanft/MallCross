@@ -52,6 +52,41 @@ const PS1_VERTEX_SNAP: float = 100.0
 const PS1_SHADER: Shader = preload("res://shaders/ps1_box.gdshader")
 const NPC_SCENE: PackedScene = preload("res://scenes/NPC.tscn")
 
+# v1.5.0 Phase 18 — ambient NPCs that wander between two hand-authored
+# waypoints. Pure presentation: no dialog, no interaction, no collision.
+# Patrol routes deliberately stay on open floor so the NPCs don't need
+# any pathfinding logic (no walls in the way; floor is flat).
+const AMBIENT_NPC_DATA: Array = [
+	{
+		# Window-shopper drifting along the west side of the corridor.
+		"start": Vector3(-2.6, 0.0, -16.0),
+		"end": Vector3(-2.6, 0.0, 16.0),
+		"body_color": Color(0.45, 0.55, 0.70),
+		"head_color": Color(0.85, 0.70, 0.55),
+	},
+	{
+		# Counterpart on the east side, walking the opposite way.
+		"start": Vector3(2.6, 0.0, 16.0),
+		"end": Vector3(2.6, 0.0, -16.0),
+		"body_color": Color(0.55, 0.40, 0.45),
+		"head_color": Color(0.80, 0.65, 0.50),
+	},
+	{
+		# Food court patron crossing east-to-west in front of the tables.
+		"start": Vector3(-7.0, 0.0, 26.0),
+		"end": Vector3(7.0, 0.0, 26.0),
+		"body_color": Color(0.40, 0.60, 0.50),
+		"head_color": Color(0.72, 0.62, 0.50),
+	},
+	{
+		# Another food-court wanderer, deeper into the court.
+		"start": Vector3(6.0, 0.0, 31.0),
+		"end": Vector3(-6.0, 0.0, 31.0),
+		"body_color": Color(0.65, 0.50, 0.30),
+		"head_color": Color(0.85, 0.75, 0.60),
+	},
+]
+
 const FLOOR_COLOR: Color = Color(0.30, 0.30, 0.34)
 const CEILING_COLOR: Color = Color(0.78, 0.78, 0.74)
 const CORRIDOR_WALL_COLOR: Color = Color(0.52, 0.50, 0.46)
@@ -94,8 +129,31 @@ func _ready() -> void:
 	_build_sleep_cushion()
 	_build_apartment_zone()
 	_spawn_npcs()
+	_spawn_ambient_npcs()
 	_position_player()
 	_mark_apartment_anchor_surfaces()
+
+
+func _spawn_ambient_npcs() -> void:
+	# Builds the patrol set defined in AMBIENT_NPC_DATA. The Player node
+	# is added later by the existing _position_player flow, so we look it
+	# up from the parent so each ambient NPC can cache the reference for
+	# LOD checks. If the Player isn't found (e.g. headless smoke test
+	# without the full scene), the LOD check falls through to always-on
+	# and the NPCs still simulate — slightly more CPU but no failure.
+	var player: Node3D = get_node_or_null("Player")
+	for entry in AMBIENT_NPC_DATA:
+		var npc: AmbientNPC = AmbientNPC.new()
+		npc.name = "AmbientNPC"
+		npc.configure(
+			entry["start"] as Vector3,
+			entry["end"] as Vector3,
+			entry["body_color"] as Color,
+			entry["head_color"] as Color
+		)
+		if player != null:
+			npc.cache_player(player)
+		add_child(npc)
 
 
 func _spawn_npcs() -> void:
