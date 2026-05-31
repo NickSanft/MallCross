@@ -110,3 +110,66 @@ func test_home_goods_ids_are_distinct() -> void:
 	for item in ItemCatalog.items_for_shop(Item.SHOP_HOME_GOODS):
 		assert_false(seen.has(item.id), "Duplicate id %s in home_goods catalog" % item.id)
 		seen[item.id] = true
+
+
+# ----- v1.6.0 Music Store + Arcade (upstairs shops) ---------------------
+
+func test_music_store_has_at_least_one_track() -> void:
+	# Music Store sells track packs. Empty catalog means the upstairs
+	# shop facade would render a "(No items in this shop yet.)" stub,
+	# which is the wrong story shape for v1.6.0.
+	assert_gt(ItemCatalog.items_for_shop(Item.SHOP_MUSIC_STORE).size(), 0)
+
+
+func test_music_store_excludes_furniture() -> void:
+	# Track packs are SLOT_FUNCTIONAL, not SLOT_FURNITURE. Catch a
+	# regression where a future commit accidentally tags a home_goods
+	# item with the music shop id.
+	for item in ItemCatalog.items_for_shop(Item.SHOP_MUSIC_STORE):
+		assert_ne(item.slot, Item.SLOT_FURNITURE, "Music store item %s should not be furniture" % item.id)
+
+
+func test_arcade_sells_token_items() -> void:
+	# Loose check: arcade catalog should contain at least one item with
+	# 'token' in its id. Locks in the "token sink" story.
+	var has_token: bool = false
+	for item in ItemCatalog.items_for_shop(Item.SHOP_ARCADE):
+		if item.id.contains("token"):
+			has_token = true
+			break
+	assert_true(has_token, "Arcade catalog should have at least one token item")
+
+
+func test_upstairs_shop_costs_positive() -> void:
+	# Same guarantee as the home_goods test — no free items.
+	for shop in [Item.SHOP_MUSIC_STORE, Item.SHOP_ARCADE]:
+		for item in ItemCatalog.items_for_shop(shop):
+			assert_gt(item.cost, 0, "Item %s should cost > 0 Woints" % item.id)
+
+
+func test_upstairs_shop_ids_are_distinct_within_each_shop() -> void:
+	for shop in [Item.SHOP_MUSIC_STORE, Item.SHOP_ARCADE]:
+		var seen: Dictionary = {}
+		for item in ItemCatalog.items_for_shop(shop):
+			assert_false(seen.has(item.id), "Duplicate id %s in %s catalog" % [item.id, shop])
+			seen[item.id] = true
+
+
+func test_all_four_shops_cataloged() -> void:
+	# Single test that pins the full set of wired shops. If a future
+	# patch adds a new shop, this test will need updating — that's the
+	# point (forces the matching CHANGELOG entry).
+	var expected: Array = [Item.SHOP_MALL_GENERAL, Item.SHOP_HOME_GOODS, Item.SHOP_MUSIC_STORE, Item.SHOP_ARCADE]
+	for shop in expected:
+		assert_gt(ItemCatalog.items_for_shop(shop).size(), 0, "Shop %s should have at least one item" % shop)
+
+
+func test_no_item_belongs_to_multiple_shops() -> void:
+	# Each Item carries exactly one shop_id field; this test asserts
+	# the catalog respects that. Effectively a sanity check that we
+	# didn't accidentally duplicate a single item across two shops.
+	var item_to_shop: Dictionary = {}
+	for shop in [Item.SHOP_MALL_GENERAL, Item.SHOP_HOME_GOODS, Item.SHOP_MUSIC_STORE, Item.SHOP_ARCADE]:
+		for item in ItemCatalog.items_for_shop(shop):
+			assert_false(item_to_shop.has(item.id), "Item %s appears in multiple shops" % item.id)
+			item_to_shop[item.id] = shop

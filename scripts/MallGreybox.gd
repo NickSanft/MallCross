@@ -96,6 +96,43 @@ const TABLE_TOP_COLOR: Color = Color(0.55, 0.40, 0.30)
 const TABLE_LEG_COLOR: Color = Color(0.30, 0.22, 0.18)
 const FOOD_COURT_FLOOR_TINT: Color = Color(0.34, 0.34, 0.38)
 
+# --- v1.6.0 Phase 19: second-floor balcony + escalator + upstairs shops ----
+# Scope choices:
+#   - One escalator ramp (cosmetically "the down side" is the player walking
+#     back down the same ramp). A second parallel ramp + a moving-stripe
+#     texture are deferred — they're aesthetic, not gameplay.
+#   - The "balcony" is a single second-floor slab over the back half of the
+#     food court, not an O-shape around the full atrium. The atrium view is
+#     created by a hole cut in the food court ceiling above the escalator
+#     mouth — looking up there shows the underside of the second floor.
+#     Wrap-around balcony is a Phase 19.x polish.
+const SECOND_FLOOR_Y: float = WALL_HEIGHT + FLOOR_THICKNESS              # 5.4 — sits on top of food-court ceiling
+const SECOND_FLOOR_WALKABLE_Y: float = SECOND_FLOOR_Y + FLOOR_THICKNESS  # 5.8 — top of the slab
+const SECOND_FLOOR_HEIGHT: float = 3.6                                   # ceiling rise above the walkable surface
+const SECOND_FLOOR_DEPTH: float = 10.0                                   # back-half of food court (~ rear 10m)
+const SECOND_FLOOR_WIDTH: float = FOOD_COURT_WIDTH
+const BALCONY_FLOOR_COLOR: Color = Color(0.36, 0.34, 0.30)
+const BALCONY_WALL_COLOR: Color = Color(0.50, 0.45, 0.40)
+const BALCONY_CEILING_COLOR: Color = Color(0.82, 0.82, 0.78)
+const SKYLIGHT_COLOR: Color = Color(0.65, 0.78, 0.95)
+const RAILING_COLOR: Color = Color(0.20, 0.20, 0.25)
+const RAILING_THICKNESS: float = 0.06
+const RAILING_HEIGHT: float = 1.0
+
+const ESCALATOR_SLOPE_DEGREES: float = 30.0
+const ESCALATOR_WIDTH: float = 2.0
+const ESCALATOR_SLAB_THICKNESS: float = 0.2
+const ESCALATOR_COLOR: Color = Color(0.55, 0.55, 0.60)
+const ESCALATOR_STRIPE_COLOR: Color = Color(0.95, 0.85, 0.30)
+
+# Upstairs NPC patrols the back wall, west to east and back.
+const UPSTAIRS_AMBIENT_NPC_DATA: Dictionary = {
+	"start": Vector3(-7.0, 0.0, 35.5),
+	"end": Vector3(7.0, 0.0, 35.5),
+	"body_color": Color(0.50, 0.50, 0.70),
+	"head_color": Color(0.85, 0.70, 0.50),
+}
+
 var _store_front_colors: Array[Color] = [
 	Color(0.70, 0.35, 0.30),
 	Color(0.35, 0.60, 0.40),
@@ -128,8 +165,12 @@ func _ready() -> void:
 	_build_food_court_tables()
 	_build_sleep_cushion()
 	_build_apartment_zone()
+	_build_second_floor()
+	_build_escalator()
+	_build_second_floor_shops()
 	_spawn_npcs()
 	_spawn_ambient_npcs()
+	_spawn_upstairs_ambient_npc()
 	_position_player()
 	_mark_apartment_anchor_surfaces()
 
@@ -248,8 +289,225 @@ func _build_food_court_floor_and_ceiling() -> void:
 	var floor_pos: Vector3 = Vector3(0.0, -FLOOR_THICKNESS * 0.5, fc_z)
 	add_child(_make_box("FoodCourtFloor", floor_pos, floor_size, FOOD_COURT_FLOOR_TINT))
 
-	var ceiling_pos: Vector3 = Vector3(0.0, WALL_HEIGHT + FLOOR_THICKNESS * 0.5, fc_z)
-	add_child(_make_box("FoodCourtCeiling", ceiling_pos, floor_size, CEILING_COLOR))
+	# v1.6.0 Phase 19: the back half of the food court ceiling is replaced
+	# by the second-floor slab (via _build_second_floor). Build only the
+	# front half of the ceiling here — covers entrance side of the food
+	# court but leaves the back half open as an atrium up to the upstairs.
+	var fc_back_z: float = CORRIDOR_LENGTH * 0.5 + FOOD_COURT_DEPTH
+	var front_ceiling_depth: float = FOOD_COURT_DEPTH - SECOND_FLOOR_DEPTH
+	var front_ceiling_z: float = fc_back_z - SECOND_FLOOR_DEPTH - front_ceiling_depth * 0.5
+	var front_ceiling_size: Vector3 = Vector3(FOOD_COURT_WIDTH, FLOOR_THICKNESS, front_ceiling_depth)
+	var front_ceiling_pos: Vector3 = Vector3(0.0, WALL_HEIGHT + FLOOR_THICKNESS * 0.5, front_ceiling_z)
+	add_child(_make_box("FoodCourtCeilingFront", front_ceiling_pos, front_ceiling_size, CEILING_COLOR))
+
+
+# --- v1.6.0 Phase 19: second-floor balcony ---------------------------
+
+func _build_second_floor() -> void:
+	# Single slab over the back half of the food court at SECOND_FLOOR_Y.
+	# Doubles as the food-court ceiling for that strip (atrium view from
+	# below shows the slab's underside). Center is offset toward fc_back.
+	var fc_back_z: float = CORRIDOR_LENGTH * 0.5 + FOOD_COURT_DEPTH
+	var slab_z: float = fc_back_z - SECOND_FLOOR_DEPTH * 0.5
+	var slab_size: Vector3 = Vector3(SECOND_FLOOR_WIDTH, FLOOR_THICKNESS, SECOND_FLOOR_DEPTH)
+	var slab_pos: Vector3 = Vector3(0.0, SECOND_FLOOR_Y + FLOOR_THICKNESS * 0.5, slab_z)
+	add_child(_make_box("SecondFloorSlab", slab_pos, slab_size, BALCONY_FLOOR_COLOR))
+
+	# Outer walls upstairs. The south wall (atrium side) is built as two
+	# pieces flanking a 4 m gap where the escalator mouth lives — players
+	# stepping off the ramp should NOT be greeted by an immediate wall.
+	var atrium_gap_width: float = 4.0
+	var atrium_edge_z: float = fc_back_z - SECOND_FLOOR_DEPTH
+	var side_wall_size: Vector3 = Vector3(WALL_THICKNESS, SECOND_FLOOR_HEIGHT, SECOND_FLOOR_DEPTH)
+	var west_x: float = -SECOND_FLOOR_WIDTH * 0.5 - WALL_THICKNESS * 0.5
+	var east_x: float = SECOND_FLOOR_WIDTH * 0.5 + WALL_THICKNESS * 0.5
+	var wall_y: float = SECOND_FLOOR_WALKABLE_Y + SECOND_FLOOR_HEIGHT * 0.5
+	add_child(_make_box("SecondFloorWestWall", Vector3(west_x, wall_y, slab_z), side_wall_size, BALCONY_WALL_COLOR))
+	add_child(_make_box("SecondFloorEastWall", Vector3(east_x, wall_y, slab_z), side_wall_size, BALCONY_WALL_COLOR))
+
+	var back_wall_size: Vector3 = Vector3(SECOND_FLOOR_WIDTH, SECOND_FLOOR_HEIGHT, WALL_THICKNESS)
+	var back_wall_z: float = fc_back_z + WALL_THICKNESS * 0.5
+	add_child(_make_box("SecondFloorBackWall", Vector3(0.0, wall_y, back_wall_z), back_wall_size, BALCONY_WALL_COLOR))
+
+	# South wall — two pieces flanking the escalator mouth.
+	var half_gap: float = atrium_gap_width * 0.5
+	var south_segment_width: float = (SECOND_FLOOR_WIDTH - atrium_gap_width) * 0.5
+	var south_y: float = wall_y
+	var south_z: float = atrium_edge_z - WALL_THICKNESS * 0.5
+	var south_west_x: float = -SECOND_FLOOR_WIDTH * 0.5 + south_segment_width * 0.5
+	var south_east_x: float = SECOND_FLOOR_WIDTH * 0.5 - south_segment_width * 0.5
+	var south_segment_size: Vector3 = Vector3(south_segment_width, SECOND_FLOOR_HEIGHT, WALL_THICKNESS)
+	add_child(_make_box("SecondFloorSouthWallWest", Vector3(south_west_x, south_y, south_z), south_segment_size, BALCONY_WALL_COLOR))
+	add_child(_make_box("SecondFloorSouthWallEast", Vector3(south_east_x, south_y, south_z), south_segment_size, BALCONY_WALL_COLOR))
+
+	# Railings along the atrium edge — the same gap in the south wall,
+	# so the player gets a low railing where the wall isn't (rest of the
+	# south edge already has the full wall). Two short pieces flanking
+	# the escalator mouth, on the atrium side of the gap.
+	var railing_y: float = SECOND_FLOOR_WALKABLE_Y + RAILING_HEIGHT * 0.5
+	var railing_size: Vector3 = Vector3(half_gap * 0.5, RAILING_HEIGHT, RAILING_THICKNESS)
+	# Note: the south wall already covers everything outside the 4 m gap.
+	# The railing fills the inner edges of that gap, where you could
+	# otherwise step off into the atrium void.
+	# Inner railing segments — each spans from edge of escalator (1.5 m
+	# half-gap inset) to the wall.
+	# For simplicity, just place a single skinny railing piece on each
+	# side of the escalator mouth, hugging the south edge.
+	var rail_inner_offset: float = ESCALATOR_WIDTH * 0.5 + 0.2
+	var rail_w_x: float = -SECOND_FLOOR_WIDTH * 0.5 * 0.0  # placeholder centered
+	# Compute the two railing segments precisely:
+	# Each runs from the escalator edge (X = ±rail_inner_offset) to the
+	# south-wall pieces (which start at X = ±half_gap).
+	var railing_west_width: float = half_gap - rail_inner_offset
+	var railing_east_width: float = railing_west_width
+	if railing_west_width > 0.0:
+		var rail_west_x: float = -(rail_inner_offset + railing_west_width * 0.5)
+		var rail_east_x: float = rail_inner_offset + railing_east_width * 0.5
+		var rail_size: Vector3 = Vector3(railing_west_width, RAILING_HEIGHT, RAILING_THICKNESS)
+		add_child(_make_box("SecondFloorRailingWest", Vector3(rail_west_x, railing_y, south_z), rail_size, RAILING_COLOR))
+		add_child(_make_box("SecondFloorRailingEast", Vector3(rail_east_x, railing_y, south_z), rail_size, RAILING_COLOR))
+
+	# Ceiling for the second floor with a stylized skylight — single thin
+	# blue panel inset into the otherwise tan ceiling. Two pieces:
+	# perimeter ceiling + center skylight tile at a different color so
+	# Phase 20's day/night cycle can swap or recolor it. For v1.6.0 the
+	# skylight is just decorative.
+	var ceiling_y: float = SECOND_FLOOR_WALKABLE_Y + SECOND_FLOOR_HEIGHT + FLOOR_THICKNESS * 0.5
+	var ceiling_size: Vector3 = Vector3(SECOND_FLOOR_WIDTH, FLOOR_THICKNESS, SECOND_FLOOR_DEPTH)
+	add_child(_make_box("SecondFloorCeiling", Vector3(0.0, ceiling_y, slab_z), ceiling_size, BALCONY_CEILING_COLOR))
+	var skylight_size: Vector3 = Vector3(SECOND_FLOOR_WIDTH * 0.45, 0.05, SECOND_FLOOR_DEPTH * 0.40)
+	var skylight_y: float = ceiling_y - FLOOR_THICKNESS * 0.5 - 0.025
+	add_child(_make_box("SecondFloorSkylight", Vector3(0.0, skylight_y, slab_z), skylight_size, SKYLIGHT_COLOR))
+
+	# One overhead light to keep the upstairs visible.
+	var light: OmniLight3D = OmniLight3D.new()
+	light.name = "SecondFloorLight"
+	light.position = Vector3(0.0, SECOND_FLOOR_WALKABLE_Y + SECOND_FLOOR_HEIGHT - 0.4, slab_z)
+	light.light_energy = 1.6
+	light.omni_range = 18.0
+	add_child(light)
+
+
+func _build_escalator() -> void:
+	# A single ramp from the food court floor (Y=0) up to the second-floor
+	# walkable surface (Y=SECOND_FLOOR_WALKABLE_Y). Centered on X=0, runs
+	# south-to-north so the lower end is closer to the corridor entrance
+	# and the upper end empties onto the second-floor mouth.
+	#
+	# Direction: south (Z=lower) -> north (Z=higher). +Y rotation 0; tilt
+	# uses positive X-axis rotation to raise the +Z end.
+	var fc_back_z: float = CORRIDOR_LENGTH * 0.5 + FOOD_COURT_DEPTH
+	var atrium_edge_z: float = fc_back_z - SECOND_FLOOR_DEPTH
+	# Rise = SECOND_FLOOR_WALKABLE_Y; slope = ESCALATOR_SLOPE_DEGREES.
+	var rise: float = SECOND_FLOOR_WALKABLE_Y
+	var slope_radians: float = deg_to_rad(ESCALATOR_SLOPE_DEGREES)
+	var ramp_length: float = rise / sin(slope_radians)
+	var ramp_run: float = rise / tan(slope_radians)  # horizontal run
+	# Upper end at the atrium edge (Z = atrium_edge_z). Lower end at
+	# Z = atrium_edge_z - ramp_run, Y = 0. Ramp center is halfway.
+	var center_z: float = atrium_edge_z - ramp_run * 0.5
+	var center_y: float = rise * 0.5
+	var ramp_size: Vector3 = Vector3(ESCALATOR_WIDTH, ESCALATOR_SLAB_THICKNESS, ramp_length)
+	var ramp: StaticBody3D = _make_box("Escalator", Vector3.ZERO, ramp_size, ESCALATOR_COLOR)
+	ramp.position = Vector3(0.0, center_y, center_z)
+	# Positive rotation around X raises the +Z end. Floor max angle on
+	# CharacterBody3D defaults to 45° so a 30° ramp is comfortably walkable.
+	ramp.rotation = Vector3(slope_radians, 0.0, 0.0)
+	add_child(ramp)
+
+	# Stripe accent down the middle — purely decorative. Two thin yellow
+	# bars flanking the centerline so the ramp reads as an escalator at
+	# a glance.
+	var stripe_offset: float = ESCALATOR_WIDTH * 0.25
+	for sign in [-1, 1]:
+		var stripe_size: Vector3 = Vector3(0.08, 0.04, ramp_length - 0.4)
+		var stripe: StaticBody3D = _make_box("EscalatorStripe", Vector3.ZERO, stripe_size, ESCALATOR_STRIPE_COLOR)
+		stripe.position = Vector3(float(sign) * stripe_offset, center_y, center_z)
+		stripe.position.y += ESCALATOR_SLAB_THICKNESS * 0.5 + 0.02
+		stripe.rotation = Vector3(slope_radians, 0.0, 0.0)
+		add_child(stripe)
+
+	# Floating directional label at the lower end so the player can find it.
+	var label: Label3D = Label3D.new()
+	label.name = "EscalatorLabel"
+	label.text = "↑ UPSTAIRS"
+	label.font_size = 96
+	label.modulate = Color(0.95, 0.85, 0.30)
+	label.outline_size = 6
+	label.outline_modulate = Color.BLACK
+	label.pixel_size = 0.005
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.position = Vector3(0.0, 1.8, atrium_edge_z - ramp_run + 0.5)
+	add_child(label)
+
+
+func _build_second_floor_shops() -> void:
+	# Two facades along the back wall of the upper level — Music Store
+	# (jukebox track packs) and Arcade (token sink). Same metadata pattern
+	# as the ground-floor stores; ShopUI dispatches on shop_id, and the
+	# ItemCatalog supplies the per-shop inventory.
+	var fc_back_z: float = CORRIDOR_LENGTH * 0.5 + FOOD_COURT_DEPTH
+	var facade_z: float = fc_back_z - STORE_FRONT_THICKNESS * 0.5 - 0.05
+	var facade_y: float = SECOND_FLOOR_WALKABLE_Y + STORE_FRONT_HEIGHT * 0.5
+	var facade_size: Vector3 = Vector3(STORE_WIDTH * 0.55, STORE_FRONT_HEIGHT * 0.85, STORE_FRONT_THICKNESS)
+
+	var music_facade: StaticBody3D = _make_box(
+		"MusicStoreFacade",
+		Vector3(-FOOD_COURT_WIDTH * 0.25, facade_y, facade_z),
+		facade_size,
+		Color(0.40, 0.30, 0.65),
+	)
+	music_facade.add_to_group(Player.INTERACTION_GROUP)
+	music_facade.set_meta("shop_id", Item.SHOP_MUSIC_STORE)
+	music_facade.set_meta("shop_label", "Music Store")
+	add_child(music_facade)
+	_add_upstairs_label(music_facade.position, "MUSIC")
+
+	var arcade_facade: StaticBody3D = _make_box(
+		"ArcadeFacade",
+		Vector3(FOOD_COURT_WIDTH * 0.25, facade_y, facade_z),
+		facade_size,
+		Color(0.85, 0.25, 0.25),
+	)
+	arcade_facade.add_to_group(Player.INTERACTION_GROUP)
+	arcade_facade.set_meta("shop_id", Item.SHOP_ARCADE)
+	arcade_facade.set_meta("shop_label", "Arcade")
+	add_child(arcade_facade)
+	_add_upstairs_label(arcade_facade.position, "ARCADE")
+
+
+func _add_upstairs_label(facade_pos: Vector3, text: String) -> void:
+	# Floating billboard label in front of an upstairs shop facade.
+	# Pinned slightly south of the facade so it sits between the player
+	# and the wall when walking up to a store.
+	var label: Label3D = Label3D.new()
+	label.text = text
+	label.font_size = 180
+	label.modulate = Color.WHITE
+	label.outline_size = 10
+	label.outline_modulate = Color.BLACK
+	label.pixel_size = 0.005
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.position = facade_pos + Vector3(0.0, 0.4, -0.6)
+	add_child(label)
+
+
+func _spawn_upstairs_ambient_npc() -> void:
+	# Single ambient NPC pacing the back wall on the second floor. Y is
+	# raised to the walkable surface so the NPC isn't floating inside the
+	# food court ceiling.
+	var data: Dictionary = UPSTAIRS_AMBIENT_NPC_DATA
+	var start_pos: Vector3 = (data["start"] as Vector3) + Vector3(0.0, SECOND_FLOOR_WALKABLE_Y, 0.0)
+	var end_pos: Vector3 = (data["end"] as Vector3) + Vector3(0.0, SECOND_FLOOR_WALKABLE_Y, 0.0)
+	var npc: AmbientNPC = AmbientNPC.new()
+	npc.name = "AmbientNPCUpstairs"
+	npc.configure(start_pos, end_pos, data["body_color"] as Color, data["head_color"] as Color)
+	var player: Node3D = get_node_or_null("Player")
+	if player != null:
+		npc.cache_player(player)
+	add_child(npc)
 
 
 func _build_corridor_walls() -> void:

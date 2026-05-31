@@ -17,6 +17,9 @@ const SLOT_FURNITURE: String = "furniture"
 # just keep callers honest about what's wired up.
 const SHOP_MALL_GENERAL: String = "mall_general"
 const SHOP_HOME_GOODS: String = "home_goods"
+# v1.6.0 Phase 19: two upstairs shops on the second floor.
+const SHOP_MUSIC_STORE: String = "music_store"
+const SHOP_ARCADE: String = "arcade"
 
 # Furniture anchor types. Used by Phase 17.2 placement to decide where the
 # ghost-preview can land. Empty string = non-placeable (perks, cosmetics).

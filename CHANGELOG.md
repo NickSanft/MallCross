@@ -4,6 +4,70 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-05-29 — Phase 19: Mall second floor
+
+The biggest scene-graph change since v1.0.0. The mall now has **a second floor**, accessed by an escalator ramp at the back of the food court. Two new shops (Music Store + Arcade) live upstairs. An NPC paces the back wall. An atrium opening lets you look up.
+
+### Added
+- **Second-floor balcony** over the back half of the food court. Slab at `SECOND_FLOOR_Y` (top of original food-court ceiling, 5.4 m) with a walkable surface at 5.8 m. 20 m wide × 10 m deep — half the food-court footprint, leaving the front half roofed normally.
+- **Atrium opening**. The food court ceiling now only covers the front half (entrance side). The back half is replaced by the underside of the second-floor slab. Looking up from in front of the escalator shows the upstairs floor — the mall reads as two-story for the first time.
+- **Escalator ramp** in the center of the food court. 30° slope, 2 m wide, ~11.6 m long. Two yellow stripes flanking the centerline so it reads as an escalator rather than a generic ramp. Floating "↑ UPSTAIRS" billboard label at the lower end so the player can find it without explanation.
+- **Two upstairs shop facades** on the back wall of the second floor:
+  - **Music Store** (`shop_id = music_store`) — sells 3 jukebox track packs (Lounge / Jazz / Melancholy) at 75–100 Woints. Cosmetic ownership for now; future patches can let the player pick which track plays next.
+  - **Arcade** (`shop_id = arcade`) — sells 2 token bags (Small / Big) at 25 / 100 Woints. Pure flex / Woints sink until a future mini-game lands. The existing `big_spender` / `hoarder` achievements still fire on Arcade purchases.
+- **Upstairs ambient NPC** patrolling the back wall of the second floor west-to-east and back. Uses the v1.5.0 `AmbientNPC` class — same patrol loop, same LOD cutoff, same bob gait.
+- **Stylized skylight panel** centered in the second-floor ceiling, tinted sky-blue. Decorative for v1.6.0; Phase 20's day/night cycle will swap or recolor it.
+- **Overhead light** above the second floor so the upstairs is visible without a separate environment shift.
+- **`Item.SHOP_MUSIC_STORE` / `Item.SHOP_ARCADE`** ID constants.
+- **+7 new tests** in `test_item_catalog.gd`:
+  - Music store has at least one track and excludes furniture.
+  - Arcade catalog includes a token item.
+  - All upstairs items cost > 0 Woints.
+  - All 4 wired shops have at least one item.
+  - No item belongs to multiple shops (sanity check against accidental duplicates).
+  - Upstairs shop item ids are distinct within each shop.
+
+### Changed
+- **`MallGreybox._build_food_court_floor_and_ceiling`** now builds only the front-half of the food-court ceiling. The back half is the second-floor slab built by `_build_second_floor`. Net result: the back half of the food court has its ceiling raised by ~80 cm (slab top at 5.8 m vs original 5.4 m).
+- **`_ready` sequence** gains three new builder calls: `_build_second_floor`, `_build_escalator`, `_build_second_floor_shops` plus a single-NPC spawner `_spawn_upstairs_ambient_npc`.
+- **`project.godot`** version bumped to `1.6.0`.
+
+### Why it matters
+A one-story mall reads as a corridor with rooms off it. A two-story mall, even a small one, reads as **a place**. The escalator ramp is the first vertical movement in the game; the ability to look up from the food court and see the upstairs walking surface gives the food court a sense of volume that no amount of fog could fake.
+
+The two new shops also push the Woints economy past the "perks + furniture" comfort zone. Track packs hint at a future where the player curates the jukebox; the Arcade is a pure sink that exists to give long-streak players somewhere to spend the surplus.
+
+### Architecture
+- **Slab doubles as ceiling.** The second-floor floor IS the back-half food-court ceiling — one mesh serves both. Avoids the awkward "build a floor, build a ceiling underneath it, hope they don't z-fight" approach. The atrium opening is just "where the second floor isn't."
+- **South wall has a hole, not two walls.** Where the escalator empties onto the second floor, the south wall is built as two flanking pieces with a 4 m gap. Players step off the ramp into the gap. Two short railing pieces hug the gap on the atrium-edge side so you can't accidentally walk back off into the void.
+- **Escalator is a rotated box, no animation.** PS1 aesthetic excuses the lack of moving stairs; the yellow stripe geometry sells it visually. Slope is 30°, well under `CharacterBody3D.floor_max_angle` (45° default) so the player walks up without sliding.
+- **Item model unchanged.** Two new shops cost zero new schema work — they're just two more strings in the `shop_id` field. `items_for_shop` filters as before. This is the payoff for the v1.4.0 Item-model extension.
+
+### Flow
+1. Walk to the back of the food court.
+2. See the **↑ UPSTAIRS** label at the foot of the escalator. Step onto the ramp.
+3. Walk up the slope — physics handles the climb naturally.
+4. Step off onto the second floor. Two facades visible against the back wall: **MUSIC** and **ARCADE**.
+5. NPC pacing the back wall west-to-east; walk past them.
+6. Interact (E) with either facade to open the standard ShopUI with that shop's filtered catalog.
+7. Walk back down the same ramp to return.
+
+### Pre-push checklist (Phase 19 / v1.6.0)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 21 bundled puzzles (unchanged).
+- [x] GUT: **492/492** tests passing (added 7 for Music Store / Arcade catalogs; total up from 485).
+
+### Known limitations
+- **One escalator, not two.** The plan called for a parallel up/down pair with a moving-stripe texture. v1.6.0 ships one ramp the player walks both directions on. A second parallel ramp + animated stripes is a Phase 19.x polish — purely aesthetic, no gameplay impact.
+- **Balcony doesn't wrap the atrium.** Today's second floor is a single back-half slab. A full O-shape balcony with railing along all four atrium edges is a richer build (requires perimeter-piece geometry instead of a single slab) and lands as a future polish patch.
+- **Skylight is just a tinted ceiling tile.** Phase 20 (day/night cycle) replaces this with a real time-of-day-tinted overhead light.
+- **Music Store track packs are cosmetic ownership.** Buying one doesn't change which loop the jukebox plays — Phase 17.3's track-index-from-position-hash logic still picks autonomously. Hooking the owned set into the jukebox is a follow-up.
+- **Arcade tokens do nothing.** They're a pure Woints sink. A future mini-game (or season-system unlock per Phase 22) could give them real value.
+
+[1.6.0]: https://github.com/NickSanft/MallCross/releases/tag/v1.6.0
+
 ## [1.5.0] - 2026-05-28 — Phase 18: NPC ambient pathing
 
 Polish phase — no new gameplay. **4 background NPCs now wander the mall**, walking back and forth along hand-authored patrols. The mall finally feels populated rather than diorama-still.

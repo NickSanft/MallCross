@@ -135,6 +135,55 @@ static func all_items() -> Array:
 			"anchor": Item.ANCHOR_FLOOR,
 			"color": [0.65, 0.20, 0.45],
 		}),
+		# --- music_store (upstairs, v1.6.0) ------------------------------
+		# Cosmetic ownership for now — Phase 17.3's jukebox auto-rotates
+		# its three procedural tracks. Future patches can let the player
+		# pick the next track from their owned set.
+		Item.from_dict({
+			"id": "track_lounge",
+			"name": "Lounge Track Pack",
+			"description": "Mellow C-major lounge loop for the jukebox. Cosmetic ownership for now — auto-rotates with the others.",
+			"cost": 75,
+			"slot": Item.SLOT_FUNCTIONAL,
+			"shop_id": Item.SHOP_MUSIC_STORE,
+		}),
+		Item.from_dict({
+			"id": "track_jazz",
+			"name": "Jazz Track Pack",
+			"description": "Dm7 walking-bass jazz loop. Adds variety to the jukebox.",
+			"cost": 100,
+			"slot": Item.SLOT_FUNCTIONAL,
+			"shop_id": Item.SHOP_MUSIC_STORE,
+		}),
+		Item.from_dict({
+			"id": "track_melancholy",
+			"name": "Melancholy Track Pack",
+			"description": "Em-Am-Dm-G — slower, moodier. For evening solves.",
+			"cost": 100,
+			"slot": Item.SLOT_FUNCTIONAL,
+			"shop_id": Item.SHOP_MUSIC_STORE,
+		}),
+		# --- arcade (upstairs, v1.6.0) -----------------------------------
+		# Pure Woints sink. The tokens don't unlock anything in v1.6.0;
+		# Phase 22's season system might use them. Buying them does
+		# trigger the existing big_spender / hoarder achievements so
+		# the player isn't getting nothing.
+		Item.from_dict({
+			"id": "arcade_token_small",
+			"name": "Small Token Bag",
+			"description": "A handful of arcade tokens. Pure flex — the games are still being installed.",
+			"cost": 25,
+			"slot": Item.SLOT_COSMETIC,
+			"shop_id": Item.SHOP_ARCADE,
+		}),
+		Item.from_dict({
+			"id": "arcade_token_large",
+			"name": "Big Token Bag",
+			"description": "Roughly five Small Token Bags' worth. The Arcade clerk grins.",
+			"cost": 100,
+			"slot": Item.SLOT_COSMETIC,
+			"shop_id": Item.SHOP_ARCADE,
+		}),
 	]
 
 
