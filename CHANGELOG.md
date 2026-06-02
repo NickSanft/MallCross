@@ -4,6 +4,44 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-05-31 — Phase 21: HTML5 build target
+
+**MallCross now ships a browser-playable build.** Drop the zip on any static host (itch.io, GitHub Pages, a hand-rolled `python3 -m http.server`) and players can open the URL and start solving puzzles. No install, no download for the player — just the page.
+
+### Added
+- **`[preset.2] = "Web"`** in `export_presets.cfg`. Single-threaded (no Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy header requirement, so the build runs on GitHub Pages and itch.io out of the box). All-resources export filter. Adaptive canvas resize.
+- **Release matrix entry** in `.github/workflows/release.yml` for the Web target. Output is `index.html`; the Package step zips the entire `build/` directory so `.wasm`, `.pck`, and supporting JS ship together. Bundles as `MallCross-web.zip`.
+- **README "Web (HTML5)"** section under Download. Documents the HTTP-not-file:// requirement, gives a one-line `python3 -m http.server` recipe, notes that saves persist via IndexedDB and that clearing site data clears `user://`.
+
+### Why it matters
+**Discoverability.** A desktop binary requires the player to commit to a 70–100 MB download before they know whether they like the game. A browser link is *zero commitment* — click → 30 seconds → solving MINI Day 1. itch.io embeds, share-a-link on social, link from the GitHub README — all suddenly viable.
+
+The desktop builds still exist and stay the canonical experience. The Web build is the "try before you commit" entry point.
+
+### Architecture
+- **Single-threaded by design.** Enabling threading in the Web preset would require the host to send Cross-Origin-Opener-Policy + Cross-Origin-Embedder-Policy headers (the SharedArrayBuffer security gate). GitHub Pages and most simple static hosts don't supply those. Single-threaded keeps the build playable on the broadest set of hosts; if we ever move to a host that supports the headers, flipping `variant/thread_support=true` is the only change.
+- **No shader fallback needed.** The PS1 vertex-snap shader is plain GLSL with vertex snapping in `vertex()` and flat albedo in `fragment()` — fully WebGL 2 compatible. No `OS.has_feature("web")` branches.
+- **Title screen already handles the user gesture requirement.** Browsers block audio context creation until a user gesture. The v1.0.1 title screen waits for any keypress / mouse click before transitioning to Main.tscn, which satisfies the gesture. No HTML5-specific bootstrap needed.
+- **`user://` maps to IndexedDB.** `Profile` + `AchievementStore` + `SettingsManager` all use `FileAccess.open("user://...")` which Godot routes through IndexedDB in the browser. Save persistence works automatically — no schema changes required.
+- **No code path changes.** Phase 21 is a pure CI + packaging phase. Zero changes to `scripts/`. The 517 existing GUT tests still cover the same surface area on the Web build (or would, if Godot ran headless tests in WebAssembly — which it doesn't yet; we rely on the desktop test runs covering the same code).
+
+### Pre-push checklist (Phase 21 / v1.8.0)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 21 bundled puzzles (unchanged).
+- [x] GUT: **517/517** tests passing (no new tests this phase — Web preset is a CI + packaging concern, not a runtime code change).
+- [ ] **Web export pipeline validated in CI** — verified after the first tag push to v1.8.0 produces a `MallCross-web.zip` artifact attached to the release.
+
+### Known limitations
+- **No automatic GitHub Pages deploy yet.** The release ships the zip; hosting it on Pages is a manual unpack + commit-to-gh-pages-branch step today. A future patch can add `.github/workflows/pages-deploy.yml` to publish the latest build to `https://NickSanft.github.io/MallCross/`.
+- **No PWA manifest.** Browser users can't "install" the game as a standalone app. The preset has `progressive_web_app/enabled=false`; flipping it on + providing icon assets is a future polish.
+- **Browser test surface is small.** Recent Chrome and Firefox are the smoke-test targets. Safari should work (WebGL 2 + AudioContext are all standard) but hasn't been verified end-to-end.
+- **Performance settings aren't exposed.** Slower devices may need a lower render scale; today the only mitigation is FOV reduction (v1.1.0) and turning off music (v1.1.0). A future settings slider for render scale would help mobile devices.
+- **Mouse-capture (pointer lock) requires user interaction.** Standard browser security; no workaround. The first click after the title screen captures the pointer.
+
+[1.8.0]: https://github.com/NickSanft/MallCross/releases/tag/v1.8.0
+
 ## [1.7.0] - 2026-05-31 — Phase 20: Day/night cycle
 
 The mall's lighting changes as time passes. Walk for ~15 minutes and you'll see dawn → noon → dusk → midnight roll past. Sleep jumps to the next morning. Desk lamps brighten as the sun goes down. The upstairs skylight tints from blue-noon to orange-dusk to navy-midnight.

@@ -10,12 +10,18 @@ Lo-fi PS1/N64 vibe: vertex-snap, point-filtered low-res textures, distance fog, 
 
 ## Download
 
-Pre-built binaries are attached to the [latest release](https://github.com/NickSanft/MallCross/releases/latest):
+Pre-built artifacts are attached to the [latest release](https://github.com/NickSanft/MallCross/releases/latest):
 
 - **Windows x86_64** — single `MallCross.exe` (~100 MB, self-contained).
 - **Linux x86_64** — single `MallCross.x86_64` ELF (~70 MB, self-contained). Mark executable (`chmod +x`) and run.
+- **Web (HTML5)** — `MallCross-web.zip` containing `index.html` + `.wasm` + `.pck` + supporting files. **Must be served over HTTP** (not opened as `file://`) due to browser security. Unzip and run any static HTTP server in the unzip directory — for example:
+  ```bash
+  python3 -m http.server 8000
+  # then visit http://localhost:8000/
+  ```
+  Saves persist to the browser's IndexedDB; clearing your site data clears your `user://` save. Tested on recent Chrome and Firefox; Safari should work but is less smoke-tested.
 
-No installer, no dependencies — Godot's runtime is statically linked and all game data is embedded in the binary.
+No installer, no dependencies for the desktop binaries — Godot's runtime is statically linked and all game data is embedded in the binary.
 
 ## Gameplay loop
 

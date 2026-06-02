@@ -1,9 +1,10 @@
 name: Release
 
-# Builds Linux + Windows binaries via headless Godot export. Triggers on
-# any tag push matching `v*` (which creates a GitHub Release with the
-# binaries attached) and on `workflow_dispatch` (build-only — no release
-# is created — for testing the export pipeline before cutting a tag).
+# Builds Linux + Windows + Web (HTML5) artifacts via headless Godot
+# export. Triggers on any tag push matching `v*` (which creates a
+# GitHub Release with the binaries attached) and on `workflow_dispatch`
+# (build-only — no release is created — for testing the export
+# pipeline before cutting a tag).
 
 on:
   push:
@@ -31,6 +32,12 @@ jobs:
           - preset: "Windows Desktop"
             output: "MallCross.exe"
             label: "windows-x86_64"
+          # v1.8.0 Phase 21 — HTML5 / Web build. Output is a directory
+          # of index.html + .wasm + .pck + supporting JS; the Package
+          # step zips them together so players unzip-and-host.
+          - preset: "Web"
+            output: "index.html"
+            label: "web"
 
     steps:
       - name: Checkout
