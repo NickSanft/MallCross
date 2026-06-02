@@ -23,6 +23,9 @@ const _CATALOG: Array = [
 	{"id": "bookworm", "name": "Bookworm", "description": "Buy pencil.", "hidden": false},
 	{"id": "big_spender", "name": "Big Spender", "description": "Last Woint.", "hidden": false},
 	{"id": "hoarder", "name": "Hoarder", "description": "1000 Woints.", "hidden": false},
+	{"id": "season_pass", "name": "Season Pass", "description": "21 solves in a season.", "hidden": false},
+	{"id": "rooftop_regular", "name": "Rooftop Regular", "description": "All 4 rooftop puzzles.", "hidden": false},
+	{"id": "perfectionist", "name": "Perfectionist", "description": "Every scheduled puzzle in a season.", "hidden": true},
 ]
 
 
@@ -227,3 +230,63 @@ func test_all_with_state_includes_unlock_marker() -> void:
 			assert_eq(int(entry["unlock_day"]), 3)
 			return
 	fail_test("first_solve missing from all_with_state output")
+
+
+# ----- v1.9.0 rooftop + season-progress hooks --------------------------
+
+func test_notify_rooftop_solved_does_not_fire_until_all_four() -> void:
+	# Solve three out of four; rooftop_regular should NOT fire.
+	var s: AchievementService = _service()
+	var profile: Profile = Profile.new()
+	profile.mark_puzzle_solved("rooftop_week_one")
+	profile.mark_puzzle_solved("rooftop_week_two")
+	profile.mark_puzzle_solved("rooftop_week_three")
+	var fired: Array = s.notify_rooftop_solved("rooftop_week_three", 1, profile)
+	assert_false(fired.has("rooftop_regular"))
+
+
+func test_notify_rooftop_solved_fires_after_fourth() -> void:
+	var s: AchievementService = _service()
+	var profile: Profile = Profile.new()
+	for week_id in ["rooftop_week_one", "rooftop_week_two", "rooftop_week_three", "rooftop_week_four"]:
+		profile.mark_puzzle_solved(week_id)
+	var fired: Array = s.notify_rooftop_solved("rooftop_week_four", 22, profile)
+	assert_true(fired.has("rooftop_regular"))
+
+
+func test_notify_rooftop_solved_empty_puzzle_id_no_op() -> void:
+	var s: AchievementService = _service()
+	var profile: Profile = Profile.new()
+	var fired: Array = s.notify_rooftop_solved("", 1, profile)
+	assert_eq(fired.size(), 0)
+
+
+func test_notify_season_progress_fires_season_pass_at_21() -> void:
+	# Profile has 21 first-solves in the current season.
+	var s: AchievementService = _service()
+	var profile: Profile = Profile.new()
+	profile.current_day = 25
+	for i in range(21):
+		profile.mark_puzzle_solved("p_" + str(i))
+		profile.current_day = i + 1
+	profile.current_day = 25  # current day inside season 1
+	var fired: Array = s.notify_season_progress(profile)
+	assert_true(fired.has("season_pass"))
+
+
+func test_notify_season_progress_does_not_fire_at_20() -> void:
+	var s: AchievementService = _service()
+	var profile: Profile = Profile.new()
+	for i in range(20):
+		profile.mark_puzzle_solved("p_" + str(i))
+		profile.current_day = i + 1
+	profile.current_day = 25
+	var fired: Array = s.notify_season_progress(profile)
+	assert_false(fired.has("season_pass"))
+
+
+func test_notify_season_progress_handles_null_profile() -> void:
+	# Defensive: a null profile shouldn't crash the call.
+	var s: AchievementService = _service()
+	var fired: Array = s.notify_season_progress(null)
+	assert_eq(fired.size(), 0)

@@ -168,6 +168,7 @@ func _ready() -> void:
 	_build_second_floor()
 	_build_escalator()
 	_build_second_floor_shops()
+	_build_rooftop_table()
 	_spawn_npcs()
 	_spawn_ambient_npcs()
 	_spawn_upstairs_ambient_npc()
@@ -458,6 +459,39 @@ func _build_escalator() -> void:
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
 	label.position = Vector3(0.0, 1.8, atrium_edge_z - ramp_run + 0.5)
+	add_child(label)
+
+
+func _build_rooftop_table() -> void:
+	# v1.9.0 Phase 22 — small rooftop puzzle table on the second floor.
+	# Conceptually "the rooftop access point"; a full outdoor rooftop
+	# scene is a future polish. Sits centered between the Music Store
+	# and Arcade so the player encounters it after crossing the upstairs.
+	#
+	# GameController dispatches on the `rooftop_puzzle` metadata and
+	# checks SeasonMath.is_rooftop_unlocked before opening — if locked,
+	# the prompt explains the unlock condition.
+	var fc_back_z: float = CORRIDOR_LENGTH * 0.5 + FOOD_COURT_DEPTH
+	var table_z: float = fc_back_z - 3.5
+	var table_y: float = SECOND_FLOOR_WALKABLE_Y + TABLE_TOP_HEIGHT * 0.5
+	var top_pos: Vector3 = Vector3(0.0, table_y, table_z)
+	var top: StaticBody3D = _make_box("RooftopTable", top_pos, TABLE_TOP_SIZE, Color(0.55, 0.50, 0.30))
+	top.add_to_group(Player.INTERACTION_GROUP)
+	top.set_meta("rooftop_puzzle", true)
+	top.set_meta("rooftop_label", "Rooftop weekly")
+	add_child(top)
+
+	# Floating star label so the player can spot it from the escalator.
+	var label: Label3D = Label3D.new()
+	label.text = "★ ROOFTOP ★"
+	label.font_size = 110
+	label.modulate = Color(1.0, 0.85, 0.30)
+	label.outline_size = 8
+	label.outline_modulate = Color.BLACK
+	label.pixel_size = 0.005
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.position = top_pos + Vector3(0.0, 1.2, 0.0)
 	add_child(label)
 
 

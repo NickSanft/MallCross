@@ -78,6 +78,24 @@
 			"name": "Hoarder",
 			"description": "Accumulate 1000 Woints.",
 			"hidden": false
+		},
+		{
+			"id": "season_pass",
+			"name": "Season Pass",
+			"description": "Solve 21 puzzles within a single 30-day season.",
+			"hidden": false
+		},
+		{
+			"id": "rooftop_regular",
+			"name": "Rooftop Regular",
+			"description": "Solve all 4 weekly rooftop puzzles.",
+			"hidden": false
+		},
+		{
+			"id": "perfectionist",
+			"name": "Perfectionist",
+			"description": "Solve every puzzle scheduled in a single season.",
+			"hidden": true
 		}
 	]
 }

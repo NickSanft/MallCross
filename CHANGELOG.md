@@ -4,6 +4,70 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-06-02 — Phase 22: Season progression + rooftop
+
+The final pre-2.0 phase. **Solve 21 puzzles within a single 30-day season to unlock the rooftop**, where a special weekly puzzle waits for you. Three new achievements track the long arc.
+
+### Added
+- **`scripts/SeasonMath.gd`** — pure helpers for the season math: `season_of_day`, `day_of_season`, `week_of_season`, `season_range_for_day`, `is_in_same_season`, `solves_in_current_season`, `is_rooftop_unlocked`. Constants: `DAYS_PER_SEASON = 30`, `DAYS_PER_WEEK = 7`, `WEEKS_PER_SEASON = 4`, `ROOFTOP_UNLOCK_THRESHOLD = 21`. Defensive day-0 / negative clamps so a sentinel "no day yet" never produces a season-0 lookup.
+- **4 rooftop puzzles** (`data/puzzles/rooftop_week_one.json` … `_four.json`), 9x9 each with hand-clued spines:
+  - **Week 1** — ACCESSION ("becoming heir to a title or throne")
+  - **Week 2** — ABRASIONS ("scrapes from skidding on rough ground")
+  - **Week 3** — ANECDOTAL ("based on personal stories rather than data")
+  - **Week 4** — ACADEMIAS ("worlds of higher education, plural")
+- **`PuzzleSchedule.DIFFICULTY_ROOFTOP`** constant + 4 new helpers:
+  - `rooftop_puzzle_for_week(week)` — week 1..4 lookup; clamps overflow.
+  - `rooftop_puzzle_for_day(day)` — chains through `SeasonMath.week_of_season`.
+  - `all_rooftop_puzzles()` — sorted list of all rooftop ids.
+  - The rooftop tier is intentionally **not** in `all_difficulties()` — it's week-indexed, not day-indexed.
+- **Rooftop table** on the second floor (`MallGreybox._build_rooftop_table`). Centered between Music Store and Arcade. Floating `★ ROOFTOP ★` billboard label. `rooftop_puzzle: true` metadata picked up by GameController.
+- **Unlock gate** in `GameController._show_rooftop_prompt` + `_on_rooftop_table_interact`:
+  - Locked: prompt reads `Rooftop locked — solve N more this season (X / 21)`.
+  - Unlocked: prompt reads `[E] Solve Rooftop Week W` (or `(already solved)`).
+  - Pressing E when locked is a no-op (prompt persists).
+- **3 new achievements**:
+  - **Season Pass** — 21 solves in a single season. Mirrors the rooftop unlock threshold.
+  - **Rooftop Regular** — solve all 4 rooftop puzzles (any seasons combined).
+  - **Perfectionist** (hidden) — solve every daily-scheduled puzzle in a single season. Catalog grows automatically — future content expansions auto-update what "perfectionist" requires.
+- **`AchievementService.notify_rooftop_solved`** — fires Rooftop Regular when all 4 rooftop ids are in `profile.puzzles_solved`.
+- **`AchievementService.notify_season_progress`** — fires Season Pass + Perfectionist. Idempotent so calling it after every solve is safe.
+- **14 new tests**:
+  - `test_puzzle_schedule.gd`: 8 tests for rooftop_puzzle_for_week / for_day / clamp behavior + distinct-ids + every-file-loads.
+  - `test_achievement_service.gd`: 6 tests for notify_rooftop_solved / notify_season_progress (under-threshold, at-threshold, null-profile defensive case).
+
+### Changed
+- **`AchievementService` catalog test fixture** gains the 3 new ids (season_pass / rooftop_regular / perfectionist) so the synthetic-catalog tests can exercise them end-to-end.
+- **`GameController._on_puzzle_solved`** calls `notify_season_progress(profile)` on every solve and `notify_rooftop_solved(...)` when the solved puzzle is a rooftop id.
+- **`MallGreybox._ready` sequence** calls `_build_rooftop_table` after the upstairs shops.
+- **`project.godot`** version bumped to `1.9.0`.
+
+### Why it matters
+**Long-arc motivation.** Through v1.8.0, the longest play-loop horizon was "solve today's three puzzles." The season system extends that to "clear 21 in 30 days to earn the rooftop key." A 30-in-game-day window at ~1 in-game day per real session is ~3 weeks of play, which is the first time MallCross asks the player to come back tomorrow for something they couldn't do today.
+
+The rooftop puzzle then becomes a weekly anchor — a special-occasion puzzle that the player can only attempt if they've kept up the daily habit. The Perfectionist hidden achievement closes the loop for the long-tail completionist.
+
+### Architecture
+- **Math-first, scene-wrapper-second** — same pattern as `AmbientNPC`, `TimeOfDay`. `SeasonMath` holds every formula. The GameController prompts, the AchievementService notifications, the rooftop-table dispatch — all call into the math without duplicating it.
+- **Schedule-iterating "Perfectionist"** doesn't hard-code season size. `_season_perfect` walks `PuzzleSchedule.all_difficulties()` → `scheduled_days(tier)` and asks "is every scheduled puzzle in this season's day range solved?". Phase 13's content drops, future MIDI/FULL expansions, and any future tier all auto-update what counts.
+- **Rooftop tier outside the day-axis** — `all_difficulties()` deliberately excludes rooftop because the meta-test `test_every_scheduled_id_across_all_difficulties_loads` iterates `scheduled_days(tier)` per difficulty. Rooftop is week-indexed; mixing them would break the day-keyed lookup. The new `test_every_rooftop_puzzle_file_loads` covers rooftop files separately.
+- **No Profile schema bump.** Rooftop solves live in the existing `puzzles_solved` dict alongside MINI / MIDI / FULL — they're just puzzle ids the player solved. The achievement service derives "did they solve all 4?" by membership lookup against `PuzzleSchedule.all_rooftop_puzzles()`. Pre-v1.9.0 saves continue working unchanged.
+
+### Pre-push checklist (Phase 22 / v1.9.0)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all rooftop puzzles (+ unchanged daily set).
+- [x] GUT: **563/563** tests passing (added 32 SeasonMath + 8 schedule + 6 service = 46; up from 517).
+
+### Known limitations
+- **No season-end report card modal yet.** The plan called for a "next season starts now" popup with solved/missed/streak/Woints. Deferring to a future polish — for now, the season silently advances when `current_day` crosses a 30-day boundary.
+- **Rooftop puzzles are MIDI-difficulty (9x9), not FULL.** The plan called for FULL-tier weeklies, but Phase 13c's generator wall on FULL (lucky-seed-only) made authoring 4 fresh 15x15 puzzles impractical for v1.9.0. Future generator improvements (per the Phase 13c retro notes) would unblock this.
+- **Same 4 rooftop puzzles rotate across all seasons.** Season 1 week 1 and season 2 week 1 are both `rooftop_week_one`. A future patch could add seasonally-rotating rooftop content.
+- **Rooftop isn't a separate scene.** The "rooftop" is conceptually the table on the second floor with the ★ marker, not an outdoor area. Adding a proper rooftop scene + access door is a Phase 19.x polish (when the second-floor balcony fully wraps the atrium).
+- **No visible "puzzles solved this season" HUD widget.** Players see the count in the locked-rooftop prompt; an always-on HUD line would help them track progress without walking upstairs.
+
+[1.9.0]: https://github.com/NickSanft/MallCross/releases/tag/v1.9.0
+
 ## [1.8.0] - 2026-05-31 — Phase 21: HTML5 build target
 
 **MallCross now ships a browser-playable build.** Drop the zip on any static host (itch.io, GitHub Pages, a hand-rolled `python3 -m http.server`) and players can open the URL and start solving puzzles. No install, no download for the player — just the page.

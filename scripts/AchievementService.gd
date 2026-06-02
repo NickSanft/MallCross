@@ -129,6 +129,69 @@ func notify_woints(total: int, day: int) -> Array:
 	return fired
 
 
+# v1.9.0 Phase 22: rooftop + season-progress hooks. GameController calls
+# notify_rooftop_solved after a rooftop puzzle is finished (in addition
+# to the standard puzzle_solved notification, which still fires for
+# day-1 / first-solve / no-checks / etc.). notify_season_progress runs
+# on every solve and the rooftop_unlock_state hook.
+
+
+func notify_rooftop_solved(puzzle_id: String, day: int, profile: Profile) -> Array:
+	# Fires "rooftop_regular" once the player has solved all 4 weekly
+	# rooftop puzzles. We count via profile.puzzles_solved keys against
+	# the canonical list from PuzzleSchedule.all_rooftop_puzzles(), so
+	# the test is "did this player ever solve each of them," not "are
+	# they all in the current season."
+	var fired: Array = []
+	if puzzle_id == "" or profile == null:
+		return fired
+	var all_rooftop: Array = PuzzleSchedule.all_rooftop_puzzles()
+	if all_rooftop.is_empty():
+		return fired
+	var solved_count: int = 0
+	for rid in all_rooftop:
+		if profile.is_puzzle_solved(String(rid)):
+			solved_count += 1
+	if solved_count >= all_rooftop.size() and unlock("rooftop_regular", day):
+		fired.append("rooftop_regular")
+	return fired
+
+
+func notify_season_progress(profile: Profile) -> Array:
+	# Fires "season_pass" (>= 21 solves in current season) and
+	# "perfectionist" (solved every puzzle scheduled in current
+	# season). Cheap enough to run on every notify_puzzle_solved.
+	var fired: Array = []
+	if profile == null:
+		return fired
+	var day: int = profile.current_day
+	var solves: int = SeasonMath.solves_in_current_season(day, profile.puzzles_solved)
+	if solves >= SeasonMath.ROOFTOP_UNLOCK_THRESHOLD and unlock("season_pass", day):
+		fired.append("season_pass")
+	if _season_perfect(profile, day) and unlock("perfectionist", day):
+		fired.append("perfectionist")
+	return fired
+
+
+static func _season_perfect(profile: Profile, current_day: int) -> bool:
+	# Returns true iff every daily-scheduled puzzle (MINI + MIDI + FULL)
+	# whose day falls in the current season is in profile.puzzles_solved.
+	# Iterates the schedules rather than the profile so future content
+	# expansions auto-update what "perfectionist" requires.
+	var season_range: Dictionary = SeasonMath.season_range_for_day(current_day)
+	var first_day: int = int(season_range["first"])
+	var last_day: int = int(season_range["last"])
+	for tier in PuzzleSchedule.all_difficulties():
+		for sched_day in PuzzleSchedule.scheduled_days(tier):
+			var d: int = int(sched_day)
+			if d < first_day or d > last_day:
+				continue
+			var pid: String = PuzzleSchedule.puzzle_id_for_day(d, tier)
+			if pid == "" or not profile.is_puzzle_solved(pid):
+				return false
+	return true
+
+
 # --- Helpers -----------------------------------------------------------
 
 func _solved_one_per_tier_on(profile: Profile, day: int) -> bool:

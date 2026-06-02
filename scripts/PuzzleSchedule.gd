@@ -16,6 +16,10 @@ extends RefCounted
 const DIFFICULTY_MINI: String = "mini"
 const DIFFICULTY_MIDI: String = "midi"
 const DIFFICULTY_FULL: String = "full"
+# v1.9.0 Phase 22: rooftop puzzles are weekly (4 per season). They live
+# outside the daily MINI/MIDI/FULL difficulty axis because they're
+# week-indexed within a season rather than day-indexed within a schedule.
+const DIFFICULTY_ROOFTOP: String = "rooftop"
 
 const _MINI_SCHEDULE: Dictionary = {
 	1: "mall_day_one",
@@ -53,6 +57,18 @@ const _FULL_SCHEDULE: Dictionary = {
 	7: "mall_full_day_seven",
 }
 
+# v1.9.0 Phase 22: 4 rooftop puzzles, one per week within a season. The
+# same 4 puzzles rotate across all seasons (so week 1 of season 1 and
+# week 1 of season 2 are both `rooftop_week_one`). Keeping it cyclical
+# means we don't have to generate fresh content every 30 in-game days
+# while still giving the player a stable weekly anchor.
+const _ROOFTOP_BY_WEEK: Dictionary = {
+	1: "rooftop_week_one",
+	2: "rooftop_week_two",
+	3: "rooftop_week_three",
+	4: "rooftop_week_four",
+}
+
 
 static func puzzle_id_for_day(day: int, difficulty: String = DIFFICULTY_MINI) -> String:
 	if day <= 0:
@@ -78,7 +94,34 @@ static func last_scheduled_day(difficulty: String = DIFFICULTY_MINI) -> int:
 
 
 static func all_difficulties() -> Array:
+	# Rooftop intentionally NOT in this list. The "scheduled days across
+	# all difficulties" meta-test expects daily schedules; rooftop is
+	# week-indexed and doesn't fit the day-keyed lookup the test uses.
+	# Use `rooftop_puzzle_for_week(...)` directly when you want the
+	# weekly rooftop id.
 	return [DIFFICULTY_MINI, DIFFICULTY_MIDI, DIFFICULTY_FULL]
+
+
+static func rooftop_puzzle_for_week(week: int) -> String:
+	# Week 1..4 lookup. Out-of-range weeks clamp to the nearest valid
+	# entry so SeasonMath.week_of_season's overflow on days 29-30
+	# (clamped to week 4) plays well.
+	if week <= 0:
+		week = 1
+	elif week > _ROOFTOP_BY_WEEK.size():
+		week = _ROOFTOP_BY_WEEK.size()
+	return _ROOFTOP_BY_WEEK.get(week, "")
+
+
+static func rooftop_puzzle_for_day(day: int) -> String:
+	# Convenience: walk day -> week_of_season -> puzzle_id.
+	return rooftop_puzzle_for_week(SeasonMath.week_of_season(day))
+
+
+static func all_rooftop_puzzles() -> Array:
+	var ids: Array = _ROOFTOP_BY_WEEK.values()
+	ids.sort()
+	return ids
 
 
 static func _schedule_for_difficulty(difficulty: String) -> Dictionary:

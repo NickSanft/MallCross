@@ -291,6 +291,8 @@ func _on_interactable_changed(interactable: Node) -> void:
 		_hud.show_prompt("[E] " + interactable.get_meta("apartment_label", "Customize apartment"))
 	elif interactable.has_meta("coffee_maker_brew"):
 		_show_coffee_maker_prompt()
+	elif interactable.has_meta("rooftop_puzzle"):
+		_show_rooftop_prompt()
 	elif interactable.has_meta("shop_id"):
 		_hud.show_prompt("[E] " + interactable.get_meta("shop_label", "Shop"))
 	elif interactable.has_meta("sleep_action"):
@@ -317,6 +319,43 @@ func _show_daily_puzzle_prompt() -> void:
 		_hud.show_prompt("[E] %s Day %d (already solved%s)" % [label, day, _best_time_suffix(puzzle_id)])
 	else:
 		_hud.show_prompt("[E] Solve %s Day %d%s" % [label, day, _best_time_suffix(puzzle_id)])
+
+
+func _show_rooftop_prompt() -> void:
+	# Locked until SeasonMath.ROOFTOP_UNLOCK_THRESHOLD (21) puzzles
+	# are solved in the current season. Once unlocked, the prompt
+	# names which week's puzzle is up. Already-solved rooftop puzzles
+	# show "(already solved)" the same way daily puzzles do.
+	var solves: int = SeasonMath.solves_in_current_season(_profile.current_day, _profile.puzzles_solved)
+	if solves < SeasonMath.ROOFTOP_UNLOCK_THRESHOLD:
+		_hud.show_prompt("Rooftop locked — solve %d more this season (%d / %d)" % [
+			SeasonMath.ROOFTOP_UNLOCK_THRESHOLD - solves,
+			solves,
+			SeasonMath.ROOFTOP_UNLOCK_THRESHOLD,
+		])
+		return
+	var week: int = SeasonMath.week_of_season(_profile.current_day)
+	var puzzle_id: String = PuzzleSchedule.rooftop_puzzle_for_week(week)
+	if puzzle_id == "":
+		_hud.show_prompt("[E] Rooftop puzzle (none scheduled this week)")
+		return
+	if _profile.is_puzzle_solved(puzzle_id):
+		_hud.show_prompt("[E] Rooftop Week %d (already solved%s)" % [week, _best_time_suffix(puzzle_id)])
+	else:
+		_hud.show_prompt("[E] Solve Rooftop Week %d%s" % [week, _best_time_suffix(puzzle_id)])
+
+
+func _on_rooftop_table_interact(interactable: Node) -> void:
+	var solves: int = SeasonMath.solves_in_current_season(_profile.current_day, _profile.puzzles_solved)
+	if solves < SeasonMath.ROOFTOP_UNLOCK_THRESHOLD:
+		# Player isn't yet eligible. Show the prompt; do nothing else.
+		_show_rooftop_prompt()
+		return
+	var week: int = SeasonMath.week_of_season(_profile.current_day)
+	var puzzle_id: String = PuzzleSchedule.rooftop_puzzle_for_week(week)
+	if puzzle_id == "":
+		return
+	_open_puzzle(interactable, puzzle_id)
 
 
 func _show_coffee_maker_prompt() -> void:
@@ -379,6 +418,8 @@ func _on_interaction_triggered(interactable: Node) -> void:
 		_open_apartment_menu()
 	elif interactable.has_meta("coffee_maker_brew"):
 		_on_coffee_maker_interact()
+	elif interactable.has_meta("rooftop_puzzle"):
+		_on_rooftop_table_interact(interactable)
 	elif interactable.has_meta("shop_id"):
 		_open_shop(interactable)
 	elif interactable.has_meta("sleep_action"):
@@ -621,6 +662,13 @@ func _on_puzzle_solved(elapsed_ms: int, used_check_letter: bool) -> void:
 	_push_unlocks(fired_streak)
 	var fired_hoard: Array = _achievements.notify_woints(_profile.woints, _profile.current_day)
 	_push_unlocks(fired_hoard)
+	# v1.9.0 Phase 22: rooftop-completion + season-progress hooks. Both
+	# are idempotent so calling them after every solve is fine.
+	if _current_puzzle_id.begins_with("rooftop_"):
+		var fired_roof: Array = _achievements.notify_rooftop_solved(_current_puzzle_id, _profile.current_day, _profile)
+		_push_unlocks(fired_roof)
+	var fired_season: Array = _achievements.notify_season_progress(_profile)
+	_push_unlocks(fired_season)
 
 
 func _apply_coffee_bonus(base_reward: int) -> int:

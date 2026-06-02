@@ -139,6 +139,61 @@ func test_all_difficulties_returns_three() -> void:
 	assert_eq(PuzzleSchedule.all_difficulties().size(), 3)
 
 
+# ----- Rooftop (v1.9.0) ----------------------------------------------
+
+func test_rooftop_puzzle_for_week_one() -> void:
+	assert_eq(PuzzleSchedule.rooftop_puzzle_for_week(1), "rooftop_week_one")
+
+
+func test_rooftop_puzzle_for_week_four() -> void:
+	assert_eq(PuzzleSchedule.rooftop_puzzle_for_week(4), "rooftop_week_four")
+
+
+func test_rooftop_clamps_zero_to_week_one() -> void:
+	# Day 0 / week 0 sentinel from an uninitialized profile shouldn't
+	# return empty string — clamp up to week 1.
+	assert_eq(PuzzleSchedule.rooftop_puzzle_for_week(0), "rooftop_week_one")
+
+
+func test_rooftop_clamps_above_four_to_week_four() -> void:
+	# SeasonMath.week_of_season is supposed to clamp 5+ down to 4 already,
+	# but the schedule helper defends against bugs upstream too.
+	assert_eq(PuzzleSchedule.rooftop_puzzle_for_week(7), "rooftop_week_four")
+
+
+func test_rooftop_puzzle_for_day_uses_week_of_season() -> void:
+	# Day 1 -> week 1, day 8 -> week 2, day 22 -> week 4.
+	assert_eq(PuzzleSchedule.rooftop_puzzle_for_day(1), "rooftop_week_one")
+	assert_eq(PuzzleSchedule.rooftop_puzzle_for_day(8), "rooftop_week_two")
+	assert_eq(PuzzleSchedule.rooftop_puzzle_for_day(22), "rooftop_week_four")
+
+
+func test_rooftop_puzzles_have_four_distinct_ids() -> void:
+	var ids: Array = PuzzleSchedule.all_rooftop_puzzles()
+	assert_eq(ids.size(), 4)
+	var seen: Dictionary = {}
+	for id in ids:
+		assert_false(seen.has(id), "Duplicate rooftop id: " + id)
+		seen[id] = true
+
+
+func test_rooftop_not_in_all_difficulties() -> void:
+	# Rooftop puzzles are week-indexed, not day-indexed. They live outside
+	# the standard daily schedule axis.
+	assert_does_not_have(PuzzleSchedule.all_difficulties(), PuzzleSchedule.DIFFICULTY_ROOFTOP)
+
+
+func test_every_rooftop_puzzle_file_loads() -> void:
+	# Companion to test_every_scheduled_id_across_all_difficulties_loads.
+	# Walks the rooftop set explicitly because it isn't in the daily
+	# schedule axis the original test covers.
+	for id in PuzzleSchedule.all_rooftop_puzzles():
+		var puzzle: Dictionary = PuzzleLoader.load_by_id(id)
+		var grid: CrosswordGrid = puzzle.get("grid")
+		assert_not_null(grid, "rooftop %s should load" % id)
+		assert_gt(grid.size, 0, "rooftop %s grid should be non-empty" % id)
+
+
 func test_every_scheduled_id_across_all_difficulties_loads() -> void:
 	# Meta-test: every difficulty's every scheduled day must point at a JSON
 	# file that loads cleanly.
