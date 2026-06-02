@@ -684,3 +684,37 @@ func test_coffee_bonus_rate_is_twenty_percent() -> void:
 	# Pinned in code so we don't accidentally tweak the design without a
 	# matching changelog entry.
 	assert_eq(Profile.COFFEE_BONUS_RATE, 0.20)
+
+
+# ----- time_of_day (v1.7.0) ------------------------------------------
+
+func test_fresh_profile_time_of_day_is_dawn() -> void:
+	# Default 0.30 places a brand-new profile just past dawn so the
+	# first session boots into a bright mall.
+	var p: Profile = Profile.new()
+	assert_almost_eq(p.time_of_day, 0.30, 0.001)
+
+
+func test_time_of_day_round_trips_via_dict() -> void:
+	var p: Profile = Profile.new()
+	p.time_of_day = 0.65
+	var restored: Profile = Profile.from_dict(p.to_dict())
+	assert_almost_eq(restored.time_of_day, 0.65, 0.001)
+
+
+func test_time_of_day_wraps_outside_zero_one_range() -> void:
+	# A bad save value should normalize to [0, 1) rather than crashing
+	# the day/night cycle later.
+	var restored_high: Profile = Profile.from_dict({"time_of_day": 1.50})
+	assert_almost_eq(restored_high.time_of_day, 0.50, 0.001)
+	var restored_neg: Profile = Profile.from_dict({"time_of_day": -0.25})
+	assert_almost_eq(restored_neg.time_of_day, 0.75, 0.001)
+
+
+func test_pre_v1_7_save_defaults_to_dawn() -> void:
+	# A v1.6.x save doesn't have the time_of_day key. Load should fall
+	# through to the dawn default rather than zero (which would put a
+	# returning player into midnight darkness).
+	var payload: Dictionary = {"version": 3, "woints": 100}
+	var restored: Profile = Profile.from_dict(payload)
+	assert_almost_eq(restored.time_of_day, 0.30, 0.001)

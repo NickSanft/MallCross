@@ -4,6 +4,58 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-05-31 — Phase 20: Day/night cycle
+
+The mall's lighting changes as time passes. Walk for ~15 minutes and you'll see dawn → noon → dusk → midnight roll past. Sleep jumps to the next morning. Desk lamps brighten as the sun goes down. The upstairs skylight tints from blue-noon to orange-dusk to navy-midnight.
+
+### Added
+- **`scripts/TimeOfDayMath.gd`** — pure-function helpers behind the cycle. Keeps the math tested and the scene-tree-bound TimeOfDay node thin.
+  - `advance(current, delta_seconds, rate)` — forward time, wraps into `[0, 1)`. Negative deltas clamped.
+  - `snap_to(target)` — direct jump (used by sleep).
+  - `interpolate_color(t, keyframes)` and `interpolate_float(t, keyframes)` — wrapping lerp across 4-keyframe arrays. The wrap segment (dusk → next midnight) is handled inline, no special-casing at call sites.
+  - `is_night(t, dusk, dawn)` — true between dusk and dawn, accounting for the midnight wrap.
+- **`scripts/TimeOfDay.gd`** — Node child of `GameController` that drives the cycle. Per-frame: advance the clock, recompute fog + ambient color + ambient energy, recolor skylights via material override, modulate night-lamp energy on a smooth cosine curve (1.0 at midnight, 0.10 at noon — gradient, no on/off pop).
+  - 4 keyframes each for fog color, ambient color, ambient energy, skylight color. Tuned for the PS1 fog aesthetic — saturated dawn/dusk, muted noon.
+  - One in-game cycle = ~15 real minutes (`rate_per_second = 1.0 / 900`). Slow enough that lighting doesn't strobe, fast enough that a session sees noticeable progression.
+  - Sleep jumps to `time_of_day = 0.30` (just past dawn) via `jump_to_morning()`.
+  - `pause()` / `resume()` so the cycle can freeze during cutscenes or testing.
+- **`Profile.time_of_day`** field (defaults to 0.30, dawn) — persists across launches so a returning player resumes at the same time. Round-trips via `to_dict` / `from_dict`. Wraps to `[0, 1)` on load. Pre-v1.7.0 saves load as the dawn default; no schema bump needed (additive with safe default).
+- **Group-based scene wiring**: lamps and skylights tag themselves into `night_lamp` / `skylight` groups at spawn time. TimeOfDay iterates the groups each frame — no central registry, no manual node-path coupling. Adding a new lamp in a future phase is one `add_to_group(TimeOfDay.GROUP_NIGHT_LAMP)` call away from being part of the cycle.
+- **+25 new tests**: 21 in `test_time_of_day_math.gd` covering advance + wrap + keyframe lerp + night detection + edge cases (empty keyframes, out-of-range t, wrap segment across midnight); 4 in `test_profile.gd` for the new `time_of_day` field (round-trip, normalize-on-load, default-on-missing-key).
+
+### Changed
+- **`MallGreybox.get_environment()`** new public method — returns the `Environment` resource from the `WorldEnvironment` child so `GameController._setup_time_of_day` can attach it without coupling to a node-path.
+- **`MallGreybox` skylight + desk-lamp builders** now `add_to_group` the appropriate TimeOfDay group at spawn time. The skylight's child MeshInstance3D also joins so TimeOfDay can find the surface material it needs to recolor.
+- **`GameController._on_fade_to_black_done`** (sleep handler) calls `_time_of_day.jump_to_morning()` and saves the new value to the profile.
+- **`GameController` new `_setup_time_of_day()`** runs after `_setup_apartment` in `_ready`. Picks up the saved time from the profile.
+- **`GameController._on_time_changed`** mirrors the live time into the profile each frame the time changes. Disk writes ride existing save events (puzzle solve, shop close, sleep) — no new "save every frame" pattern.
+- **`project.godot`** version bumped to `1.7.0`.
+
+### Why it matters
+A static-lit mall reads as a sealed box. A mall whose lighting drifts through the day reads as **a place that's open at certain hours** — even if the player can't tell what time it is by anything except color, the world feels less inert. Combined with v1.4.2's coffee maker bonus and v1.6.0's escalator + upstairs, the gameplay loop now stretches across what feels like an in-game afternoon. Sleeping wakes you up the next morning, not just the next day.
+
+### Architecture
+- **Math-first, scene-wrapper-second** — same pattern as `AmbientNPC` (v1.5.0). All formulas live in `TimeOfDayMath` and are tested without spinning up scene-tree nodes; `TimeOfDay` is the wrapper that calls into them.
+- **Group-based discovery beats a central registry.** Lamps and skylights opt themselves into the cycle via `add_to_group` at spawn time. TimeOfDay has no list of node paths to maintain. New lamp types in future phases participate automatically.
+- **Continuous lamp brightness curve, not threshold-flip.** `_night_strength(t)` is a triangle wave that peaks at midnight and troughs at noon, producing smooth lamp brightness changes through dawn and dusk. A strict `is_night()` cutoff would produce a visible on/off pop at the threshold.
+- **Persistence via existing save events.** TimeOfDay updates `_profile.time_of_day` on every `time_changed` signal (cheap — just a float assignment), but the actual disk write rides the existing `ProfileStore.save_to_path` calls in solve / shop / sleep handlers. No per-frame disk I/O.
+- **Fog drives the mood, not material albedo.** The PS1 vertex-lit shader bakes in flat colors per surface; dynamic lighting on individual meshes would require a different shader. Tinting the fog and ambient light is enough to read the time of day across the whole scene without touching any of the PS1-shaded meshes.
+
+### Pre-push checklist (Phase 20 / v1.7.0)
+- [x] `godot --headless --quit` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/Main.tscn` exit 0.
+- [x] `godot --headless --quit-after 60 res://scenes/TitleScreen.tscn` exit 0.
+- [x] `tools/puzzle_validate.gd` `OK` on all 21 bundled puzzles (unchanged).
+- [x] GUT: **517/517** tests passing (added 25; up from 492).
+
+### Known limitations
+- **PS1 vertex-lit materials don't respond to ambient changes** — the player perceives the day/night cycle through fog tint and lamp brightness. A real shader-replacement pass would make every wall and floor visibly tint with the ambient color; that's a future polish.
+- **One in-game cycle per 15 real minutes is not exposed in settings.** A future settings slider could let the player slow this down to real-time (24 hours per cycle) or speed it up.
+- **Sleep always wakes at the same time.** `SLEEP_WAKE_TIME = 0.30` is hardcoded. A more textured implementation could vary the wake time based on streak / Woints / a "snooze" item.
+- **No sun/moon visible.** The skylight tile recolors but there's no visible disk crossing the sky. The PS1 aesthetic doesn't really call for one, but it's a future option.
+
+[1.7.0]: https://github.com/NickSanft/MallCross/releases/tag/v1.7.0
+
 ## [1.6.0] - 2026-05-29 — Phase 19: Mall second floor
 
 The biggest scene-graph change since v1.0.0. The mall now has **a second floor**, accessed by an escalator ramp at the back of the food court. Two new shops (Music Store + Arcade) live upstairs. An NPC paces the back wall. An atrium opening lets you look up.

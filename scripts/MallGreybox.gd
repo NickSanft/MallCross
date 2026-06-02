@@ -229,6 +229,17 @@ func apply_npc_hints_for_day(current_day: int) -> void:
 			npc.set_dialog(String(npc_data["dialog"]))
 
 
+func get_environment() -> Environment:
+	# Exposes the Environment resource so TimeOfDay can mutate fog +
+	# ambient color each frame. Returns null if _build_environment
+	# hasn't run yet (shouldn't happen in production — _ready order
+	# guarantees Env exists before anyone could query).
+	var world_env: WorldEnvironment = get_node_or_null("Env") as WorldEnvironment
+	if world_env == null:
+		return null
+	return world_env.environment
+
+
 func _build_environment() -> void:
 	var world_env: WorldEnvironment = WorldEnvironment.new()
 	world_env.name = "Env"
@@ -377,7 +388,15 @@ func _build_second_floor() -> void:
 	add_child(_make_box("SecondFloorCeiling", Vector3(0.0, ceiling_y, slab_z), ceiling_size, BALCONY_CEILING_COLOR))
 	var skylight_size: Vector3 = Vector3(SECOND_FLOOR_WIDTH * 0.45, 0.05, SECOND_FLOOR_DEPTH * 0.40)
 	var skylight_y: float = ceiling_y - FLOOR_THICKNESS * 0.5 - 0.025
-	add_child(_make_box("SecondFloorSkylight", Vector3(0.0, skylight_y, slab_z), skylight_size, SKYLIGHT_COLOR))
+	var skylight: StaticBody3D = _make_box("SecondFloorSkylight", Vector3(0.0, skylight_y, slab_z), skylight_size, SKYLIGHT_COLOR)
+	# v1.7.0 Phase 20: tag the skylight + its MeshInstance3D so TimeOfDay
+	# can recolor it each frame. The mesh is the actual surface that
+	# needs the albedo tint applied.
+	skylight.add_to_group(TimeOfDay.GROUP_SKYLIGHT)
+	for child in skylight.get_children():
+		if child is MeshInstance3D:
+			child.add_to_group(TimeOfDay.GROUP_SKYLIGHT)
+	add_child(skylight)
 
 	# One overhead light to keep the upstairs visible.
 	var light: OmniLight3D = OmniLight3D.new()
@@ -745,16 +764,18 @@ func _make_coffee_maker_interactable(visual: StaticBody3D) -> void:
 
 
 func _attach_lamp_light(visual: StaticBody3D) -> void:
-	# Small warm OmniLight3D centered above the lamp base. Energy is
-	# constant for now; Phase 20 (day/night cycle) will modulate it so
-	# the lamp visibly turns on at night. The light range is short
-	# enough not to wash out the food court's existing mall lighting.
+	# Small warm OmniLight3D centered above the lamp base. v1.7.0
+	# (Phase 20) tags it as a night_lamp; TimeOfDay then modulates
+	# the energy from ~10% during noon to 100% at midnight. The
+	# `light_energy` value below is the "night-time max" — TimeOfDay
+	# multiplies the base, doesn't add to it.
 	var light: OmniLight3D = OmniLight3D.new()
 	light.name = "LampLight"
 	light.position = Vector3(0.0, 0.30, 0.0)
 	light.light_color = Color(1.0, 0.92, 0.75)
 	light.light_energy = 0.80
 	light.omni_range = 3.5
+	light.add_to_group(TimeOfDay.GROUP_NIGHT_LAMP)
 	visual.add_child(light)
 
 

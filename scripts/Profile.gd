@@ -42,6 +42,11 @@ var placed_furniture: Dictionary = {}
 # sleeps without solving anything. Introduced in v1.4.2; loads as -1 for
 # any save without the field.
 var coffee_brewed_day: int = -1
+# Time-of-day in [0.0, 1.0). 0.0 = midnight, 0.25 = dawn, 0.5 = noon,
+# 0.75 = dusk. Introduced in v1.7.0 (Phase 20). Persisted so the player
+# returns to the same time of day when they relaunch. Default 0.30
+# (just past dawn) so a fresh save boots into a bright mall.
+var time_of_day: float = 0.30
 
 # puzzle_id -> CrosswordState (in-memory). Serialized via CrosswordSerializer
 # at to_dict() time so we keep one source of truth for the on-disk shape.
@@ -315,6 +320,7 @@ func to_dict() -> Dictionary:
 		"best_times": best_times.duplicate(),
 		"placed_furniture": placed_furniture.duplicate(true),
 		"coffee_brewed_day": coffee_brewed_day,
+		"time_of_day": time_of_day,
 	}
 
 
@@ -350,6 +356,10 @@ static func from_dict(payload: Dictionary) -> Profile:
 	# (no brew pending). Negative values are accepted as-is so the sentinel
 	# survives a round-trip.
 	profile.coffee_brewed_day = int(payload.get("coffee_brewed_day", -1))
+	# time_of_day: additive field added in v1.7.0. Missing key -> default
+	# 0.30 (dawn). Clamped (wrapped) into [0, 1) so a malformed save can't
+	# fold the day/night cycle into a black screen.
+	profile.time_of_day = fposmod(float(payload.get("time_of_day", 0.30)), 1.0)
 	# placed_furniture: v3+ field. v1/v2 saves don't have it; loaded as empty.
 	# Each entry must have a 3-float "position" array and a numeric
 	# "rotation". Malformed entries are dropped, NOT silently fixed up —

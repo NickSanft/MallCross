@@ -44,6 +44,11 @@ var _pending_community_result: Dictionary = {}
 # in-world ghost preview + raycast loop. Both are spawned dynamically.
 var _apartment_menu: ApartmentEditMenu
 var _placement: PlacementController
+# v1.7.0 Phase 20 — day/night cycle. TimeOfDay is a plain Node child so
+# its _process runs the in-game clock. The Environment reference is
+# fetched from MallGreybox at setup time; lamps + skylights register
+# themselves via groups.
+var _time_of_day: TimeOfDay
 
 
 func _ready() -> void:
@@ -52,6 +57,7 @@ func _ready() -> void:
 	_setup_achievements()
 	_setup_community_picker()
 	_setup_apartment()
+	_setup_time_of_day()
 	_refresh_hud()
 	_apply_settings(_settings)
 	_player.interactable_changed.connect(_on_interactable_changed)
@@ -128,6 +134,28 @@ func _setup_apartment() -> void:
 	add_child(_placement)
 
 	_mall.spawn_placed_furniture(_profile)
+
+
+func _setup_time_of_day() -> void:
+	# Spawn the cycle node, hand it the live Environment, and seed it
+	# from the profile so the player resumes at the same time of day.
+	_time_of_day = TimeOfDay.new()
+	_time_of_day.name = "TimeOfDay"
+	add_child(_time_of_day)
+	var env: Environment = _mall.get_environment()
+	if env != null:
+		_time_of_day.attach_environment(env)
+	_time_of_day.set_time(_profile.time_of_day)
+	_time_of_day.time_changed.connect(_on_time_changed)
+
+
+func _on_time_changed(t: float) -> void:
+	# Mirror the live time into the profile so the periodic
+	# ProfileStore.save (triggered by puzzle solve, shop close, etc.)
+	# captures it. We don't save on every frame — that would hammer
+	# disk. Persistence rides on existing save events plus the
+	# sleep-jump explicit save in _on_fade_to_black_done.
+	_profile.time_of_day = t
 
 
 func _push_unlocks(ids: Array) -> void:
@@ -506,6 +534,12 @@ func _on_fade_to_black_done() -> void:
 	if not _sleeping:
 		return
 	_profile.advance_day()
+	# v1.7.0 Phase 20: sleep jumps the time-of-day clock to just past
+	# dawn so the player wakes into a bright mall. Profile gets the
+	# same value so a quit-and-relaunch lands on the same time.
+	if _time_of_day != null:
+		_time_of_day.jump_to_morning()
+		_profile.time_of_day = _time_of_day.time_of_day
 	ProfileStore.save_to_path(_profile)
 	_refresh_hud()
 	# New day = new puzzle = new NPC hints. Push them before unpausing so the
