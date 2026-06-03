@@ -4,9 +4,11 @@
 [![Release](https://github.com/NickSanft/MallCross/actions/workflows/release.yml/badge.svg)](https://github.com/NickSanft/MallCross/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-First-person 3D mall exploration. Each in-game day you walk to a food court table and solve a real NYT-style crossword — your choice of **5x5 MINI**, **9x9 MIDI**, or **15x15 FULL**. Solving earns **Woints**, the in-game currency you spend at mall stores on cosmetic items (visible on hands/shadow) and functional items that modify puzzle UX (pencil mode, check-letter, hint dialogue with NPCs).
+**Current stable release: [v2.0.0 — Definitive Edition](https://github.com/NickSanft/MallCross/releases/tag/v2.0.0).**
 
-Lo-fi PS1/N64 vibe: vertex-snap, point-filtered low-res textures, distance fog, procedural footsteps.
+First-person 3D mall exploration. Each in-game day you walk to a food court table and solve a real NYT-style crossword — your choice of **5x5 MINI**, **9x9 MIDI**, or **15x15 FULL**. Solve 21 in a 30-day season to unlock the **rooftop weekly**. Solving earns **Woints**, the in-game currency you spend at four mall shops on perks, furniture for your apartment, jukebox tracks, and arcade tokens. The mall is two-story; the lighting cycles through dawn / noon / dusk / midnight while you walk.
+
+Lo-fi PS1/N64 vibe: vertex-snap, point-filtered low-res textures, distance fog, procedural footsteps + jukebox muzak.
 
 ## Download
 

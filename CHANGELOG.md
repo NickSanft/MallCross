@@ -4,6 +4,75 @@ All notable changes to MallCross are documented here. Format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-06-02 — Definitive Edition
+
+Capstone tag. **No new gameplay code** — `v2.0.0` is the same scene tree, the same scripts, and the same data as `v1.9.0`. The point of the tag is to mark a stable baseline that completed the full v1.x roadmap and gives the project a clean recommend-this-version anchor for new players.
+
+### What v2.0.0 ships
+
+The release artifacts are the standard three:
+- `MallCross-linux-x86_64.zip` — single-file ELF, ~70 MB.
+- `MallCross-windows-x86_64.zip` — single-file .exe, ~100 MB.
+- `MallCross-web.zip` — browser build (`index.html` + `.wasm` + `.pck`); serve over HTTP.
+
+### The arc, summarized
+
+Counting from `v1.0.0` (first public release on 2026-05-24) through `v2.0.0` (this tag, 2026-06-02), the v1.x line shipped **17 tagged releases** plus three sub-ships within the apartment-customization arc:
+
+| Tag | What |
+|---|---|
+| v1.0.0 | Public release — 3-tier crossword, mall, shops, NPCs, persistence |
+| v1.0.1 | Polish bundle (title, BuildInfo, solve animation, hotkey overlay, best-time) |
+| v1.0.2 / .3 / .4 | Content + generator overhaul (+6 MINI, +6 MIDI, +6 FULL; forward-checking + letter index) |
+| v1.1.0 | Settings menu complete (FOV, audio buses, key rebinding) |
+| v1.2.0 | Achievements (catalog, toast, browser) |
+| v1.3.0 | Community puzzles (drop-a-JSON modder pipeline) |
+| v1.4.0 / .1 / .2 | Apartment customization (shop → placement → functional behaviors) |
+| v1.5.0 | NPC ambient pathing |
+| v1.6.0 | Mall second floor + Music + Arcade |
+| v1.7.0 | Day/night cycle (time-of-day drives fog, lamps, skylight) |
+| v1.8.0 | HTML5 build target |
+| v1.9.0 | Season progression + rooftop |
+
+### Stats at v2.0.0
+
+| Category | Count |
+|---|---|
+| Crossword puzzles bundled | **31** (13 MINI + 7 MIDI + 7 FULL + 4 rooftop) |
+| Shops in the mall | **4** (Mall General, Home Goods, Music Store, Arcade) |
+| Catalog items | **18** (2 perks + 9 furniture + 3 jukebox tracks + 2 arcade tokens + 2 future) |
+| Achievements | **16** (13 launch + Season Pass + Rooftop Regular + Perfectionist) |
+| GUT tests passing | **563 / 563** |
+| Build targets | **3** (Linux x86_64, Windows x86_64, Web) |
+| Schema migrations supported | **v1 → v2 → v3** for Profile; safe-defaults for additive v1.7.0 + v1.4.2 fields |
+
+### Design through-lines
+
+A few patterns held up across the arc and are worth remembering for future maintenance:
+
+- **Math-first, scene-wrapper-second** — `MovementMath` (player), `AmbientNPCMath` (Phase 18), `TimeOfDayMath` (Phase 20), `SeasonMath` (Phase 22) all live as pure-function static helpers tested without instantiating Node3D scenes. The scene-bound wrappers stay thin and refactorable.
+- **Group-based discovery beats a central registry** — lamps and skylights opt themselves into the day/night cycle by joining `TimeOfDay.GROUP_*` at spawn time. The TimeOfDay node iterates groups each frame and never needs to be told about new nodes.
+- **Dynamic UI spawning** — most modals (`AchievementsMenu`, `AchievementToast`, `CommunityPuzzlePicker`, `ApartmentEditMenu`, `PlacementController`) are created programmatically in `GameController._ready` rather than instanced from `.tscn` files. The Main.tscn diff stays empty across every UI ship.
+- **Additive Profile schema with safe defaults** — `best_times` (v1.0.1), `placed_furniture` (v1.4.1), `coffee_brewed_day` (v1.4.2), `time_of_day` (v1.7.0). Each landing either bumped FORMAT_VERSION with a forward-migration test or stayed additive with a tested default for missing keys. Pre-v1.0 saves continue loading.
+- **Defensive parsing throughout** — Wordlist drops malformed entries; CommunityPuzzlePicker validates user-supplied JSON before serving; Profile.from_dict filters bad placed-furniture entries instead of silently teleporting things. The trade-off is more boilerplate, paid back every time a hand-edited save doesn't corrupt the world.
+
+### Known limitations (carried over from earlier phases)
+
+The v1.x roadmap explicitly documented limitations as it went. Pulling them into one place so v2.x maintainers don't have to spelunk:
+
+- **FULL puzzle generation has a wordlist density wall.** Seeds beyond 1 dead-end at 500k backtracks; the v1.0.4 forward-checking improvement helped but didn't solve it. Authoring more 15x15 puzzles requires either a wordlist expansion or a smarter solver (a generation phase that includes look-ahead beyond the immediate slot would help).
+- **No season-end report card modal.** v1.9.0 deferred this to a future polish.
+- **Apartment doesn't wrap the full atrium.** v1.6.0 ships only the back-half balcony.
+- **Music Store track packs are cosmetic ownership.** The jukebox auto-rotates its 3 procedural tracks regardless of purchases.
+- **PS1 vertex-lit materials don't tint to ambient.** The day/night cycle drives fog + lamps + skylight; static walls/floors don't respond.
+- **No PWA manifest on the Web build.** Players can't "install" the browser version as a standalone app.
+
+### What stays
+
+`v2.0.0` is identical to `v1.9.0` in behavior. Saves from `v1.9.0` load unchanged. The CI / release pipelines, the test surface, and the binary layouts are all the same. If you're playing on `v1.9.0`, there's no reason to migrate — but `v2.0.0` is the version to recommend to new players from here on.
+
+[2.0.0]: https://github.com/NickSanft/MallCross/releases/tag/v2.0.0
+
 ## [1.9.0] - 2026-06-02 — Phase 22: Season progression + rooftop
 
 The final pre-2.0 phase. **Solve 21 puzzles within a single 30-day season to unlock the rooftop**, where a special weekly puzzle waits for you. Three new achievements track the long arc.
